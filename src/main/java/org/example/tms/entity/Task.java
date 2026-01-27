@@ -24,11 +24,11 @@ public class Task {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status")
+    @Column(name = "status", columnDefinition = "task_status")
     private TaskStatus status;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "priority")
+    @Column(name = "priority", columnDefinition = "task_priority")
     private TaskPriority priority;
 
     @Column(name = "deadline")
@@ -39,7 +39,7 @@ public class Task {
     private Project project;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assignee_id")
+    @JoinColumn(name = "assignee_id",nullable = false)
     private User assignee;
 
     @Column(name = "created_at", nullable = false, updatable = false)
