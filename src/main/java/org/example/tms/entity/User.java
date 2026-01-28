@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = {"password"})
-@EqualsAndHashCode(exclude = {"password"})
+//@ToString(exclude = {"password"})
+//@EqualsAndHashCode(exclude = {"password"})
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
