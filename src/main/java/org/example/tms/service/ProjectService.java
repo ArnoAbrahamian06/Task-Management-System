@@ -2,13 +2,17 @@ package org.example.tms.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.example.tms.dto.request.CreateProjectRequest;
+import org.example.tms.dto.response.ProjectResponse;
 import org.example.tms.entity.*;
+import org.example.tms.mapper.ProjectMapper;
 import org.example.tms.repository.ProjectRepository;
+
+import org.example.tms.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Set;
+
 
 @Service
 @RequiredArgsConstructor
@@ -16,52 +20,77 @@ import java.util.Set;
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
+    private final ProjectMapper projectMapper;
 
-    @Transactional(readOnly = true)
-    public Project getById(Long id) {
-        return projectRepository.findById(id)
-                .orElseThrow(() ->
-                        new EntityNotFoundException("Project not found with id=" + id)
-                );
+
+    // Создание проекта
+    public ProjectResponse createProject(CreateProjectRequest request, Long ownerId) {
+
+        User owner = userRepository.findById(ownerId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        Project project = projectMapper.toEntity(request, owner);
+
+        // владелец автоматически становится участником проекта
+        project.getMembers().add(owner);
+
+        Project savedProject = projectRepository.save(project);
+
+        return projectMapper.toResponse(savedProject);
     }
 
+    // Получение проекта по id
     @Transactional(readOnly = true)
-    public Project getByName(String name) {
-        return projectRepository.findByName(name)
-                .orElseThrow(() ->
-                        new EntityNotFoundException("Project not found with name = " + name)
-                );
+    public ProjectResponse getProjectById(Long projectId) {
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new EntityNotFoundException("Project not found"));
+
+        return projectMapper.toResponse(project);
     }
 
-    public Project createProject(String name, String description, User owner, Set<User> members, List<Task> tasks, User assignee) {
-        if (projectRepository.existsByOwnerAndName(owner, name)) {
-            throw new IllegalArgumentException(
-                    String.format("A user named %s already has a project called << %s >>",
-                            owner.getName(), name)
-            );
+
+     // Добавление участника в проект
+    public ProjectResponse addMember(Long projectId, Long userId) {
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new EntityNotFoundException("Project not found"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        // нельзя добавить одного и того же пользователя дважды
+        if (project.getMembers().contains(user)) {
+            throw new IllegalStateException("User already a member");
         }
 
-        Project project = Project.builder()
-                .name(name)
-                .description(description)
-                .owner(owner)
-                .members(members)
-                .tasks(tasks)
-                .build();
+        project.getMembers().add(user);
 
-        return projectRepository.save(project);
+        Project updatedProject = projectRepository.save(project);
+
+        return projectMapper.toResponse(updatedProject);
     }
 
-    @Transactional(readOnly = true)
-    public List<Project> getAllProjects() {
-        return projectRepository.findAll();
-    }
 
-    public void deleteProject(Long id) {
-        if (!projectRepository.existsById(id)) {
-            throw new EntityNotFoundException("Project not found with id=" + id);
+    // Удаление участника из проекта
+    public ProjectResponse removeMember(Long projectId, Long userId) {
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new EntityNotFoundException("Project not found"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        // нельзя удалить владельца проекта
+        if (project.getOwner().equals(user)) {
+            throw new IllegalStateException("Cannot remove project owner");
         }
 
-        projectRepository.deleteById(id);
+        project.getMembers().remove(user);
+
+        Project updatedProject = projectRepository.save(project);
+
+        return projectMapper.toResponse(updatedProject);
     }
 }

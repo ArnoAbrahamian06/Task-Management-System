@@ -2,13 +2,18 @@ package org.example.tms.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.example.tms.dto.request.CreateUserRequest;
+import org.example.tms.dto.response.UserResponse;
 import org.example.tms.entity.Role;
 import org.example.tms.entity.User;
+import org.example.tms.mapper.UserMapper;
 import org.example.tms.repository.UserRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -16,49 +21,43 @@ import java.util.List;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserMapper userMapper;
+    private final PasswordEncoder passwordEncoder;
 
-    @Transactional(readOnly = true)
-    public User getById(Long id) {
-        return userRepository.findById(id)
-                .orElseThrow(() ->
-                        new EntityNotFoundException("User not found with id=" + id)
-                );
-    }
+    // Создание пользователя
+    public UserResponse createUser(CreateUserRequest request) {
 
-    @Transactional(readOnly = true)
-    public User getByEmail(String email) {
-        return userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new EntityNotFoundException("User not found with email=" + email)
-                );
-    }
-
-    public User createUser(String email, String name, String password, Role role) {
-        if (userRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("Email already exists");
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new IllegalStateException("Email already exists");
         }
 
-        User user = User.builder()
-                .email(email)
-                .name(name)
-                .password(password)
-                .role(role)
-                .build();
+        User user = userMapper.toEntity(request);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        return userMapper.toResponse(savedUser);
     }
 
+
+    // Получение пользователя по id
     @Transactional(readOnly = true)
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
+    public UserResponse getUserById(Long userId) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        return userMapper.toResponse(user);
     }
 
-    public void deleteUser(Long id) {
-        if (!userRepository.existsById(id)) {
-            throw new EntityNotFoundException("User not found with id=" + id);
-        }
+    // Получение всех пользователей
+    @Transactional(readOnly = true)
+    public List<UserResponse> getAllUsers() {
 
-        userRepository.deleteById(id);
+        return userRepository.findAll().stream()
+                .map(userMapper::toResponse)
+                .collect(Collectors.toList());
     }
 }
+
 
