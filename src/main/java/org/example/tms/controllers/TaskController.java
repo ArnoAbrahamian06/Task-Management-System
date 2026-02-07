@@ -3,49 +3,37 @@ package org.example.tms.controllers;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.tms.dto.request.CreateTaskRequest;
-import org.example.tms.dto.request.UpdateTaskRequest;
 import org.example.tms.dto.response.TaskResponse;
+import org.example.tms.entity.TaskStatus;
 import org.example.tms.service.TaskService;
-import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/tasks")
 @RequiredArgsConstructor
 public class TaskController {
 
     private final TaskService taskService;
 
-    // Создание задачи в проекте
-    @PostMapping("/projects/{projectId}/tasks")
-    @ResponseStatus(HttpStatus.CREATED)
-    public TaskResponse createTask(
-            @PathVariable Long projectId,
-            @Valid @RequestBody CreateTaskRequest request
-    ) {
-        return taskService.createTask(projectId, request);
+    @PreAuthorize("@securityService.isProjectMember(#dto.projectId)")
+    @PostMapping
+    public TaskResponse create(@RequestBody @Valid CreateTaskRequest dto) {
+        return taskService.createTask(dto);
     }
 
-    // Получение задачи по id
-    @GetMapping("/tasks/{id}")
-    public TaskResponse getTaskById(@PathVariable Long id) {
-        return taskService.getTaskById(id);
-    }
-
-    // Обновление задачи
-    @PatchMapping("/tasks/{id}")
-    public TaskResponse updateTask(
+    @PreAuthorize("@securityService.isTaskAssignee(#id)")
+    @PatchMapping("/{id}/status")
+    public TaskResponse updateStatus(
             @PathVariable Long id,
-            @RequestBody UpdateTaskRequest request
+            @RequestParam TaskStatus status
     ) {
-        return taskService.updateTask(id, request);
+        return taskService.updateStatus(id, status);
     }
-
-
-    // Удаление задачи
-    @DeleteMapping("/tasks/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteTask(@PathVariable Long id) {
+    @PreAuthorize("@securityService.isCurrentUser(#id)")
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable Long id) {
         taskService.deleteTask(id);
     }
 }
+

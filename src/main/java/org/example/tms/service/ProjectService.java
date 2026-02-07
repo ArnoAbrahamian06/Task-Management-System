@@ -9,9 +9,12 @@ import org.example.tms.mapper.ProjectMapper;
 import org.example.tms.repository.ProjectRepository;
 
 import org.example.tms.repository.UserRepository;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 
 
 @Service
@@ -23,74 +26,71 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final ProjectMapper projectMapper;
 
+    public ProjectResponse createProject(CreateProjectRequest dto) {
+        User owner = getCurrentUser();
 
-    // Создание проекта
-    public ProjectResponse createProject(CreateProjectRequest request, Long ownerId) {
-
-        User owner = userRepository.findById(ownerId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        Project project = projectMapper.toEntity(request, owner);
-
-        // владелец автоматически становится участником проекта
+        Project project = projectMapper.toEntity(dto, owner);
         project.getMembers().add(owner);
 
-        Project savedProject = projectRepository.save(project);
-
-        return projectMapper.toResponse(savedProject);
+        return projectMapper.toResponse(projectRepository.save(project));
     }
 
-    // Получение проекта по id
-    @Transactional(readOnly = true)
-    public ProjectResponse getProjectById(Long projectId) {
+    public List<ProjectResponse> getMyProjects() {
+        User user = getCurrentUser();
 
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new EntityNotFoundException("Project not found"));
+        return projectRepository.findByMembersContaining(user)
+                .stream()
+                .map(projectMapper::toResponse)
+                .toList();
+    }
 
+    public ProjectResponse addMember(Long projectId, Long userId) {
+        Project project = getProjectOrThrow(projectId);
+        User owner = getCurrentUser();
+
+        if (!project.getOwner().equals(owner)) {
+            throw new AccessDeniedException("Only owner can add members");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        project.getMembers().add(user);
         return projectMapper.toResponse(project);
     }
 
+    public ProjectResponse removeMember(Long projectId, Long userId) {
+        Project project = getProjectOrThrow(projectId);
+        User owner = getCurrentUser();
 
-     // Добавление участника в проект
-    public ProjectResponse addMember(Long projectId, Long userId) {
-
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new EntityNotFoundException("Project not found"));
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        // нельзя добавить одного и того же пользователя дважды
-        if (project.getMembers().contains(user)) {
-            throw new IllegalStateException("User already a member");
+        if (!project.getOwner().equals(owner)) {
+            throw new AccessDeniedException("Only owner can remove members");
         }
 
-        project.getMembers().add(user);
-
-        Project updatedProject = projectRepository.save(project);
-
-        return projectMapper.toResponse(updatedProject);
+        project.getMembers().removeIf(u -> u.getId().equals(userId));
+        return projectMapper.toResponse(project);
     }
 
+    public void deleteProject(Long projectId) {
+        Project project = getProjectOrThrow(projectId);
 
-    // Удаление участника из проекта
-    public ProjectResponse removeMember(Long projectId, Long userId) {
-
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new EntityNotFoundException("Project not found"));
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        // нельзя удалить владельца проекта
-        if (project.getOwner().equals(user)) {
-            throw new IllegalStateException("Cannot remove project owner");
+        if (!project.getOwner().equals(getCurrentUser())) {
+            throw new AccessDeniedException("Only owner can delete project");
         }
 
-        project.getMembers().remove(user);
+        projectRepository.delete(project);
+    }
 
-        Project updatedProject = projectRepository.save(project);
+    // helpers
 
-        return projectMapper.toResponse(updatedProject);
+    private User getCurrentUser() {
+        return userRepository.findByEmail(
+                SecurityContextHolder.getContext().getAuthentication().getName()
+        ).orElseThrow();
+    }
+
+    private Project getProjectOrThrow(Long id) {
+        return projectRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Project not found"));
     }
 }

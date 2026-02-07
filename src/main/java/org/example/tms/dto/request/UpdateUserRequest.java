@@ -1,5 +1,4 @@
-package org.example.tms.dto;
-
+package org.example.tms.dto.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -10,7 +9,8 @@ import lombok.Setter;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProjectShortDto {
-    private Long id;
+public class UpdateUserRequest {
+    private String email;
+    private String password;
     private String name;
 }

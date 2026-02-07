@@ -1,4 +1,4 @@
-package org.example.tms.dto.response;
+package org.example.tms.exception;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

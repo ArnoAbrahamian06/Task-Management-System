@@ -46,6 +46,7 @@ public class User {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
         lastLoginAt = LocalDateTime.now();
+        role = Role.USER;
     }
 
     @PreUpdate

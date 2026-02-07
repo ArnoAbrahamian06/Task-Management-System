@@ -2,13 +2,11 @@ package org.example.tms.controllers;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.example.tms.dto.request.CreateUserRequest;
+import org.example.tms.dto.request.UpdateUserRequest;
 import org.example.tms.dto.response.UserResponse;
 import org.example.tms.service.UserService;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -17,25 +15,23 @@ public class UserController {
 
     private final UserService userService;
 
-    //Создание пользователя
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public UserResponse createUser(
-            @Valid @RequestBody CreateUserRequest request
-    ) {
-        return userService.createUser(request);
+    @GetMapping("/me")
+    public UserResponse getMe() {
+        return userService.getCurrentUser();
     }
 
+    @PutMapping("/me")
+    public UserResponse updateMe(@RequestBody @Valid UpdateUserRequest dto) {
+        return userService.updateProfile(dto);
+    }
 
-    // Получение пользователя по id
+    @DeleteMapping("/me")
+    public void deleteMe() {
+        userService.deleteCurrentUser();
+    }
+
     @GetMapping("/{id}")
-    public UserResponse getUserById(@PathVariable Long id) {
+    public UserResponse getById(@PathVariable Long id) {
         return userService.getUserById(id);
-    }
-
-    // Получение всех пользователей
-    @GetMapping
-    public List<UserResponse> getAllUsers() {
-        return userService.getAllUsers();
     }
 }

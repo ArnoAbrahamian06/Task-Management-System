@@ -17,6 +17,9 @@ public class CreateTaskRequest {
     @NotBlank
     private String title;
 
+    @NotNull
+    private Long projectId;
+
     private String description;
 
     @NotNull

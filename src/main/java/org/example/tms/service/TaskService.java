@@ -3,7 +3,6 @@ package org.example.tms.service;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.example.tms.dto.request.CreateTaskRequest;
-import org.example.tms.dto.request.UpdateTaskRequest;
 import org.example.tms.dto.response.TaskResponse;
 import org.example.tms.entity.*;
 import org.example.tms.mapper.TaskMapper;
@@ -12,11 +11,12 @@ import org.example.tms.repository.TaskRepository;
 import org.example.tms.repository.UserRepository;
 
 
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.List;
+
 
 @Service
 @RequiredArgsConstructor
@@ -28,77 +28,62 @@ public class TaskService {
     private final UserRepository userRepository;
     private final TaskMapper taskMapper;
 
-    // Создание задачи в проекте
-    public TaskResponse createTask(Long projectId, CreateTaskRequest request) {
+    public TaskResponse createTask(CreateTaskRequest dto) {
+        User creator = getCurrentUser();
+        Project project = getProject(dto.getProjectId());
 
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new EntityNotFoundException("Project not found"));
-
-        User assignee = userRepository.findById(request.getAssigneeId())
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        // исполнитель должен быть участником проекта
-        if (!project.getMembers().contains(assignee)
-                && !project.getOwner().equals(assignee)) {
-            throw new IllegalStateException("Assignee is not a project member");
+        if (!project.getMembers().contains(creator)) {
+            throw new AccessDeniedException("Not a project member");
         }
 
-        Task task = taskMapper.toEntity(request, project, assignee);
+        User assignee = userRepository.findById(dto.getAssigneeId())
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
-        Task savedTask = taskRepository.save(task);
+        Task task = taskMapper.toEntity(dto, project, assignee);
 
-        return taskMapper.toResponse(savedTask);
+        return taskMapper.toResponse(taskRepository.save(task));
     }
 
+    public TaskResponse updateStatus(Long taskId, TaskStatus status) {
+        Task task = getTask(taskId);
+        User user = getCurrentUser();
 
-    // Получение задачи по id
-    @Transactional(readOnly = true)
-    public TaskResponse getTaskById(Long taskId) {
+        if (!task.getAssignee().equals(user)) {
+            throw new AccessDeniedException("Only assignee can update status");
+        }
 
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new EntityNotFoundException("Task not found"));
-
+        task.setStatus(status);
         return taskMapper.toResponse(task);
     }
 
+    public void deleteTask(Long taskId) {
+        Task task = getTask(taskId);
+        User user = getCurrentUser();
 
-    // Обновление задачи
-    public TaskResponse updateTask(Long taskId, UpdateTaskRequest request) {
+        boolean isOwner = task.getProject().getOwner().equals(user);
+        boolean isCreator = task.getAssignee().equals(user);
 
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new EntityNotFoundException("Task not found"));
-
-        User newAssignee = null;
-
-        if (request.getAssigneeId() != null) {
-            newAssignee = userRepository.findById(request.getAssigneeId())
-                    .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-            // нельзя назначить исполнителя не из проекта
-            Project project = task.getProject();
-            if (!project.getMembers().contains(newAssignee)
-                    && !project.getOwner().equals(newAssignee)) {
-                throw new IllegalStateException("Assignee is not a project member");
-            }
+        if (!isOwner && !isCreator) {
+            throw new AccessDeniedException("No permission");
         }
 
-        taskMapper.updateEntity(task, request, newAssignee);
-
-        Task updatedTask = taskRepository.save(task);
-
-        return taskMapper.toResponse(updatedTask);
+        taskRepository.delete(task);
     }
 
+    private User getCurrentUser() {
+        return userRepository.findByEmail(
+                SecurityContextHolder.getContext().getAuthentication().getName()
+        ).orElseThrow();
+    }
 
-    // Удаление задачи
-    public void deleteTask(Long taskId) {
+    private Project getProject(Long id) {
+        return projectRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Project not found"));
+    }
 
-        if (!taskRepository.existsById(taskId)) {
-            throw new EntityNotFoundException("Task not found");
-        }
-
-        taskRepository.deleteById(taskId);
+    private Task getTask(Long id) {
+        return taskRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Task not found"));
     }
 }
-
 
