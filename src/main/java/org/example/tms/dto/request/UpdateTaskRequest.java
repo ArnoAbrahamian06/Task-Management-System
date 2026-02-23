@@ -21,8 +21,14 @@ public class UpdateTaskRequest {
     private String description;
 
     private TaskStatus status;
+
     private TaskPriority priority;
+
     private LocalDateTime deadline;
+
+    private Long TasksCount;
+
+    private Long CompletedTasksCount;
 
     private Long assigneeId;
 }

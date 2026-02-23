@@ -3,6 +3,7 @@ package org.example.tms.service;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 
+import org.example.tms.dto.request.LoginRequest;
 import org.example.tms.dto.request.RegisterRequest;
 import org.example.tms.dto.request.UpdateUserRequest;
 import org.example.tms.dto.response.UserResponse;
@@ -11,7 +12,11 @@ import org.example.tms.entity.User;
 import org.example.tms.mapper.UserMapper;
 import org.example.tms.repository.UserRepository;
 
+import org.example.tms.security.CustomUserDetails;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +31,9 @@ public class  UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
+
 
     public UserResponse getCurrentUser() {
         User user = getCurrentUserEntity();
@@ -39,11 +47,18 @@ public class  UserService {
             user.setName(dto.getName());
         }
 
+        if (dto.getEmail() != null) {
+            if (!dto.getEmail().equals(user.getEmail()) && userRepository.existsByEmail(dto.getEmail())) {
+                throw new RuntimeException("Email already taken");
+            }
+            user.setEmail(dto.getEmail());
+        }
+
         if (dto.getPassword() != null) {
             user.setPassword(passwordEncoder.encode(dto.getPassword()));
         }
 
-        return userMapper.toResponse(user);
+        return userMapper.toResponse(userRepository.save(user));
     }
 
     public void deleteCurrentUser() {
@@ -79,6 +94,25 @@ public class  UserService {
 
         return  userMapper.toResponse(userRepository.save(user));
     }
+
+
+    public String login(LoginRequest dto) {
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        dto.getEmail(),
+                        dto.getPassword()
+                )
+        );
+
+        User user = userRepository.findByEmail(dto.getEmail())
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+
+        CustomUserDetails userDetails = new CustomUserDetails(user);
+
+        return jwtService.generateToken(userDetails);
+    }
+
 }
 
 

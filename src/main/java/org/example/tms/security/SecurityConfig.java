@@ -3,14 +3,14 @@ package org.example.tms.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
+import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -18,35 +18,21 @@ import org.springframework.security.web.SecurityFilterChain;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final CustomUserDetailsService userDetailsService;
+    private final JwtAuthenticationFilter jwtAuthFilter; //
+    private final AuthenticationProvider authenticationProvider; //
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http)
-            throws Exception {
-
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable) //
                 .authorizeHttpRequests(auth -> auth
-                        // публичные эндпоинты
-                        .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
-
-                        // только ADMIN
-                        .requestMatchers("/api/users/**").hasRole("ADMIN")
-
-                        // любой аутентифицированный
-                        .requestMatchers("/api/projects/**").authenticated()
-                        .requestMatchers("/api/tasks/**").authenticated()
-
-                        .anyRequest().authenticated()
+                        .requestMatchers("/api/auth/**").permitAll() // Разрешаем вход и регистрацию
+                        .anyRequest().authenticated() // Все остальные запросы защищены
                 )
-                .httpBasic(Customizer.withDefaults())
-                .userDetailsService(userDetailsService);
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) //
+                .authenticationProvider(authenticationProvider) // Используем провайдер из ApplicationConfig
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class); //
 
         return http.build();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 }

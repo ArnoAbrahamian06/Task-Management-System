@@ -3,9 +3,9 @@ spring:
     name: task-management-system
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/tms_db
-    username: postgres
-    password: Arno2006
+    url: jdbc:postgresql://84.54.30.160:5432/test_db
+    username: test_user
+    password: 123_psw
 
 
   jpa:

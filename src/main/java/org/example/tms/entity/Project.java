@@ -1,5 +1,8 @@
 package org.example.tms.entity;
 
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -31,6 +34,12 @@ public class Project {
     @JoinColumn(name = "owner_id")
     private User owner;
 
+    @Column(name = "tasks_count", nullable = false)
+    private Long taskCount;
+
+    @Column(name = "completed_count", nullable = false)
+    private Long completedCount;
+
     @ManyToMany
     @JoinTable(
             name = "project_users",
@@ -42,20 +51,11 @@ public class Project {
     @OneToMany(mappedBy = "project")
     private List<Task> tasks = new ArrayList<>();
 
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
 }

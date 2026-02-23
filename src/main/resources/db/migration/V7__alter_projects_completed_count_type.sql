@@ -1,0 +1,1 @@
+ALTER TABLE projects ALTER COLUMN completed_count TYPE BIGINT;

@@ -1,0 +1,1 @@
+ALTER TABLE projects ALTER COLUMN tasks_count TYPE BIGINT;

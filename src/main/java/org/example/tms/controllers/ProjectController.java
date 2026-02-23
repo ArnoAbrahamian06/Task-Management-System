@@ -2,9 +2,11 @@ package org.example.tms.controllers;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.example.tms.dto.ProjectRequest;
 import org.example.tms.dto.request.CreateProjectRequest;
 import org.example.tms.dto.response.ProjectResponse;
 import org.example.tms.service.ProjectService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,37 +20,16 @@ public class ProjectController {
     private final ProjectService projectService;
 
     @PostMapping
-    public ProjectResponse create(@RequestBody @Valid CreateProjectRequest dto) {
-        return projectService.createProject(dto);
+    @PreAuthorize("hasAuthority('PROJECT_CREATE')") // Проверка из Role.permissions
+    public ResponseEntity<ProjectResponse> createProject(@RequestBody CreateProjectRequest request) {
+        // Предполагается наличие ProjectService
+        return ResponseEntity.ok(projectService.createProject(request));
     }
 
-    @GetMapping
-    public List<ProjectResponse> getMyProjects() {
-        return projectService.getMyProjects();
-    }
-
-    @PreAuthorize("@securityService.isProjectOwner(#id)")
-    @PostMapping("/{id}/members/{userId}")
-    public ProjectResponse addMember(
-            @PathVariable Long id,
-            @PathVariable Long userId
-    ) {
-        return projectService.addMember(id, userId);
-    }
-
-    @PreAuthorize("@securityService.isProjectOwner(#id)")
-    @DeleteMapping("/{id}/members/{userId}")
-    public ProjectResponse removeMember(
-            @PathVariable Long id,
-            @PathVariable Long userId
-    ) {
-        return projectService.removeMember(id, userId);
-    }
-
-    @PreAuthorize("@securityService.isProjectOwner(#id)")
-    @DeleteMapping("/{id}")
-    public void delete(@PathVariable Long id) {
-        projectService.deleteProject(id);
+    @GetMapping("/my")
+    public ResponseEntity<List<ProjectResponse>> getMyProjects() {
+        // Метод возвращает список проектов, где текущий пользователь является участником
+        return ResponseEntity.ok(projectService.getMyProjects());
     }
 }
 

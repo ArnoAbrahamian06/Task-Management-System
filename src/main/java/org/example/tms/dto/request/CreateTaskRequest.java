@@ -27,6 +27,5 @@ public class CreateTaskRequest {
 
     private LocalDateTime deadline;
 
-    @NotNull
     private Long assigneeId;
 }
