@@ -40,20 +40,17 @@ public class Task {
     private LocalDateTime deadline;
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
-    @JoinTable(
-            name = "task_subtasks",
-            joinColumns = @JoinColumn(name = "task_id"),
-            inverseJoinColumns = @JoinColumn(name = "subtask_id")
-    )
-    private List<Task> subtasks = new ArrayList<>();
+    @JoinColumn(name = "task_id")
+    @Builder.Default
+    private List<Subtask> subtasks = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "project_id")
     private Project project;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assignee_id")
-    private User assignee;
+    @JoinColumn(name = "assignee_id", nullable = true)
+    private TeamMember assignee;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

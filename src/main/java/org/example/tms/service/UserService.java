@@ -16,11 +16,11 @@ import org.example.tms.security.CustomUserDetails;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 
 
 @Service
@@ -66,7 +66,7 @@ public class  UserService {
         userRepository.delete(user);
     }
 
-    private User getCurrentUserEntity() {
+    User getCurrentUserEntity() {
         String email = SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getName();
@@ -83,7 +83,6 @@ public class  UserService {
         return userMapper.toResponse(user);
     }
 
-    // register and login
     public UserResponse register(RegisterRequest dto) {
 
         User user = new User();
@@ -91,10 +90,10 @@ public class  UserService {
         user.setName(dto.getName());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setRole(Role.USER);
+        user.setLastLoginAt(LocalDateTime.now());
 
         return  userMapper.toResponse(userRepository.save(user));
     }
-
 
     public String login(LoginRequest dto) {
         authenticationManager.authenticate(
@@ -112,7 +111,6 @@ public class  UserService {
 
         return jwtService.generateToken(userDetails);
     }
-
 }
 
 

@@ -8,17 +8,18 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+
 
 @Entity
-@Table(name = "projects")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(name = "projects", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"name", "owner_id"})
+})
 public class Project {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,20 +36,17 @@ public class Project {
     private User owner;
 
     @Column(name = "tasks_count", nullable = false)
-    private Long taskCount;
+    private Long tasksCount;
 
     @Column(name = "completed_count", nullable = false)
     private Long completedCount;
 
-    @ManyToMany
-    @JoinTable(
-            name = "project_users",
-            joinColumns = @JoinColumn(name = "project_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id")
-    )
-    private Set<User> members = new HashSet<>();
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "team_id")
+    private Team team;
 
     @OneToMany(mappedBy = "project")
+    @Builder.Default
     private List<Task> tasks = new ArrayList<>();
 
     @CreationTimestamp

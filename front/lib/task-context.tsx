@@ -10,9 +10,16 @@ interface TaskContextValue {
   tasks: Task[]
   projects: Project[]
   users: User[]
+  teamMembers: User[]
   notifications: Notification[]
   settings: AppSettings | null
   loading: boolean
+
+  // Task counts
+  totalTasksCount: number
+  completedTasksCount: number
+  inProgressTasksCount: number
+  overdueTasksCount: number
 
   // Task actions
   addTask: (input: CreateTaskInput) => Promise<Task>
@@ -35,6 +42,14 @@ interface TaskContextValue {
   // Settings actions
   updateSettings: (updates: Partial<AppSettings>) => Promise<void>
 
+  // Auth
+  user: User | null
+  authenticated: boolean
+  authLoading: boolean
+  login: (email: string, password: string) => Promise<void>
+  register: (name: string, email: string, password: string) => Promise<void>
+  logout: () => void
+
   // Helpers
   getUserById: (id: string) => User | undefined
   getProjectById: (id: string) => Project | undefined
@@ -47,24 +62,44 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [teamMembers, setTeamMembers] = useState<User[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(null)
+  const [authenticated, setAuthenticated] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
+
+  // Task counts
+  const [totalTasksCount, setTotalTasksCount] = useState(0)
+  const [completedTasksCount, setCompletedTasksCount] = useState(0)
+  const [inProgressTasksCount, setInProgressTasksCount] = useState(0)
+  const [overdueTasksCount, setOverdueTasksCount] = useState(0)
 
   const loadData = useCallback(async () => {
     try {
-      const [t, p, u, n, s] = await Promise.all([
+      const [t, p, u, m, n, s, total, completed, inProgress, overdue] = await Promise.all([
         api.getTasks(),
         api.getProjects(),
         api.getUsers(),
+        api.getMyTeamMembers(),
         api.getNotifications(),
         api.getSettings(),
+        api.getTotalTasksCount(),
+        api.getCompletedTasksCount(),
+        api.getInProgressTasksCount(),
+        api.getOverdueTasksCount(),
       ])
       setTasks(t)
       setProjects(p)
-      setUsers(u)
+      setUsers(u.length ? u : m)
+      setTeamMembers(m)
       setNotifications(n)
       setSettings(s)
+      setTotalTasksCount(total)
+      setCompletedTasksCount(completed)
+      setInProgressTasksCount(inProgress)
+      setOverdueTasksCount(overdue)
     } catch (err) {
       console.error("Failed to load data:", err)
     } finally {
@@ -73,18 +108,97 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    const token = typeof window !== "undefined" ? localStorage.getItem("taskflow_token") : null
+
+    if (!token) {
+      setAuthLoading(false)
+      setLoading(false)
+      return
+    }
+
+    void (async () => {
+      try {
+        const currentUser = await api.getCurrentUser()
+        setUser(currentUser)
+        setAuthenticated(true)
+      } catch (err) {
+        console.error("Failed to restore auth session:", err)
+        api.logout()
+        setLoading(false)
+      } finally {
+        setAuthLoading(false)
+      }
+    })()
+  }, [])
+
+  useEffect(() => {
+    if (!authenticated) return
+
+    setLoading(true)
+    void loadData()
+  }, [authenticated, loadData])
+
+  const login = useCallback(async (email: string, password: string) => {
+    setAuthLoading(true)
+    try {
+      const currentUser = await api.login(email, password)
+      setUser(currentUser)
+      setAuthenticated(true)
+    } finally {
+      setAuthLoading(false)
+    }
+  }, [])
+
+  const loadCounts = useCallback(async () => {
+    try {
+      const [total, completed, inProgress, overdue] = await Promise.all([
+        api.getTotalTasksCount(),
+        api.getCompletedTasksCount(),
+        api.getInProgressTasksCount(),
+        api.getOverdueTasksCount(),
+      ])
+      setTotalTasksCount(total)
+      setCompletedTasksCount(completed)
+      setInProgressTasksCount(inProgress)
+      setOverdueTasksCount(overdue)
+    } catch (err) {
+      console.error("Failed to load counts:", err)
+    }
+  }, [])
+
+  const register = useCallback(async (name: string, email: string, password: string) => {
+    setAuthLoading(true)
+    try {
+      const currentUser = await api.register(name, email, password)
+      setUser(currentUser)
+      setAuthenticated(true)
+    } finally {
+      setAuthLoading(false)
+    }
+  }, [])
+
+  const logout = useCallback(() => {
+    api.logout()
+    setAuthenticated(false)
+    setUser(null)
+    setTasks([])
+    setProjects([])
+    setUsers([])
+    setNotifications([])
+    setSettings(null)
+    setLoading(false)
+  }, [])
 
   // Task actions
   const addTask = useCallback(async (input: CreateTaskInput) => {
     const task = await api.createTask(input)
     setTasks((prev) => [task, ...prev])
-    // Refresh projects to get updated counts
+    // Refresh projects and counts
     const updatedProjects = await api.getProjects()
     setProjects(updatedProjects)
+    await loadCounts()
     return task
-  }, [])
+  }, [loadCounts])
 
   const updateTaskAction = useCallback(async (id: string, updates: Partial<Task>) => {
     const updated = await api.updateTask(id, updates)
@@ -93,14 +207,16 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       const updatedProjects = await api.getProjects()
       setProjects(updatedProjects)
     }
-  }, [])
+    await loadCounts()
+  }, [loadCounts])
 
   const deleteTaskAction = useCallback(async (id: string) => {
     await api.deleteTask(id)
     setTasks((prev) => prev.filter((t) => t.id !== id))
     const updatedProjects = await api.getProjects()
     setProjects(updatedProjects)
-  }, [])
+    await loadCounts()
+  }, [loadCounts])
 
   const addCommentAction = useCallback(async (taskId: string, text: string) => {
     const updated = await api.addComment(taskId, "u1", text) // current user
@@ -160,9 +276,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     tasks,
     projects,
     users,
+    teamMembers,
     notifications,
     settings,
     loading,
+    totalTasksCount,
+    completedTasksCount,
+    inProgressTasksCount,
+    overdueTasksCount,
     addTask,
     updateTask: updateTaskAction,
     deleteTask: deleteTaskAction,
@@ -176,6 +297,12 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     clearAllNotifications: clearAllNotificationsAction,
     unreadNotificationsCount,
     updateSettings: updateSettingsAction,
+    user,
+    authenticated,
+    authLoading,
+    login,
+    register,
+    logout,
     getUserById,
     getProjectById,
     refreshData: loadData,

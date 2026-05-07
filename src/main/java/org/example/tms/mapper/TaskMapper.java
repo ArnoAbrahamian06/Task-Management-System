@@ -1,69 +1,40 @@
 package org.example.tms.mapper;
 
-import lombok.RequiredArgsConstructor;
 import org.example.tms.dto.request.CreateTaskRequest;
 import org.example.tms.dto.request.UpdateTaskRequest;
 import org.example.tms.dto.response.TaskResponse;
-import org.example.tms.entity.Project;
-import org.example.tms.entity.Task;
-import org.example.tms.entity.TaskStatus;
-import org.example.tms.entity.User;
-import org.springframework.stereotype.Component;
+import org.example.tms.entity.*;
+import org.mapstruct.*;
 
-@Component
-@RequiredArgsConstructor
-public class TaskMapper {
+@Mapper(
+        componentModel = "spring",
+        // Убедитесь, что UserMapper умеет превращать User в UserShortDto
+        uses = {ProjectMapper.class, UserMapper.class},
+        nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE
+)
+public interface TaskMapper {
 
-    private final ProjectMapper projectMapper;
-    private final UserMapper userMapper;
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "subtasks", ignore = true)
+    @Mapping(target = "status", constant = "NEW")
+    @Mapping(target = "project", source = "project")
+    @Mapping(target = "assignee", source = "assignee")
+    @Mapping(target = "title", source = "dto.title")
+    @Mapping(target = "description", source = "dto.description")
+    Task toEntity(CreateTaskRequest dto, Project project, TeamMember assignee);
 
-    public Task toEntity(CreateTaskRequest dto, Project project, User assignee) {
-        Task task = new Task();
-        task.setTitle(dto.getTitle());
-        task.setDescription(dto.getDescription());
-        task.setPriority(dto.getPriority());
-        task.setStatus(TaskStatus.TODO);
-        task.setDeadline(dto.getDeadline());
-        task.setProject(project);
-        task.setAssignee(assignee);
-        return task;
-    }
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "project", ignore = true)
+    @Mapping(target = "assignee", ignore = true) // Мапим вручную в сервисе по ID
+    @Mapping(target = "subtasks", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    void updateEntityFromDto(UpdateTaskRequest dto, @MappingTarget Task task);
 
-    public void updateEntity(Task task, UpdateTaskRequest dto, User assignee) {
-        if (dto.getTitle() != null) {
-            task.setTitle(dto.getTitle());
-        }
-        if (dto.getDescription() != null) {
-            task.setDescription(dto.getDescription());
-        }
-        if (dto.getStatus() != null) {
-            task.setStatus(dto.getStatus());
-        }
-        if (dto.getPriority() != null) {
-            task.setPriority(dto.getPriority());
-        }
-        if (dto.getDeadline() != null) {
-            task.setDeadline(dto.getDeadline());
-        }
-        if (assignee != null) {
-            task.setAssignee(assignee);
-        }
-    }
-
-    public TaskResponse toResponse(Task task) {
-        return new TaskResponse(
-                task.getId(),
-                task.getTitle(),
-                task.getDescription(),
-                task.getStatus(),
-                task.getPriority(),
-                task.getDeadline(),
-                projectMapper.toShortDto(task.getProject()),
-                userMapper.toShortDto(task.getAssignee()),
-                task.getCreatedAt(),
-                task.getUpdatedAt()
-        );
-    }
+    @Mapping(target = "project", source = "task.project")
+    @Mapping(target = "assignee", source = "task.assignee.user")
+    TaskResponse toResponse(Task task);
 }
-
-

@@ -24,7 +24,7 @@ export function KanbanBoard({ tasks, onTaskClick }: KanbanBoardProps) {
   return (
     <div className="flex h-full gap-4 overflow-x-auto p-4 pb-6">
       {columnConfig.map(({ status, color, dotColor }) => {
-        const columnTasks = tasks.filter((t) => t.status === status)
+        const columnTasks = (tasks || []).filter((t) => t.status === status)
         return (
           <KanbanColumn
             key={status}

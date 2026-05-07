@@ -4,31 +4,22 @@ import org.example.tms.dto.UserShortDto;
 import org.example.tms.dto.request.CreateUserRequest;
 import org.example.tms.dto.response.UserResponse;
 import org.example.tms.entity.User;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-@Component
-public class UserMapper {
+@Mapper(componentModel = "spring")
+public interface UserMapper {
 
-    public User toEntity(CreateUserRequest dto) {
-        User user = new User();
-        user.setEmail(dto.getEmail());
-        user.setRole(dto.getRole());
-        return user;
-    }
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "name", ignore = true)
+    @Mapping(target = "password", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "teamMemberships", ignore = true)
+    @Mapping(target = "lastLoginAt", ignore = true)
+    User toEntity(CreateUserRequest dto);
 
-    public UserResponse toResponse(User user) {
-        return new UserResponse(
-                user.getId(),
-                user.getName(),
-                user.getEmail(),
-                user.getRole()
-        );
-    }
+    UserResponse toResponse(User user);
 
-    public UserShortDto toShortDto(User user) {
-        return new UserShortDto(
-                user.getId(),
-                user.getEmail()
-        );
-    }
+    UserShortDto toShortDto(User user);
 }

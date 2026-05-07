@@ -1,90 +1,75 @@
 package org.example.tms.exception;
 
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 404 — сущность не найдена
+    // 1. Обработка "Объект не найден" (404)
     @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleEntityNotFound(
-            EntityNotFoundException ex,
-            HttpServletRequest request
-    ) {
-        ErrorResponse response = new ErrorResponse(
-                LocalDateTime.now(),
+    public ResponseEntity<ErrorResponse> handleNotFound(EntityNotFoundException ex) {
+        ErrorResponse error = new ErrorResponse(
                 HttpStatus.NOT_FOUND.value(),
-                HttpStatus.NOT_FOUND.getReasonPhrase(),
                 ex.getMessage(),
-                request.getRequestURI()
+                LocalDateTime.now()
         );
-
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
     }
 
-    // 400 — ошибка бизнес-логики
+    // 2. Ошибки бизнес-логики (400) — например, "Project is already attached to a team"
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalState(
-            IllegalStateException ex,
-            HttpServletRequest request
-    ) {
-        ErrorResponse response = new ErrorResponse(
-                LocalDateTime.now(),
+    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex) {
+        ErrorResponse error = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
-                HttpStatus.BAD_REQUEST.getReasonPhrase(),
-                ex.getMessage(),
-                request.getRequestURI()
+                ex.getMessage(), // Берем сообщение из throw new IllegalStateException("...")
+                LocalDateTime.now()
         );
-
-        return ResponseEntity.badRequest().body(response);
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
-    // 400 — ошибка валидации DTO
+    // 3. Ошибки доступа (403)
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                ex.getMessage(), // Теперь будет выводиться "Only Team Lead can manage projects" или стандартное
+                LocalDateTime.now()
+        );
+        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
+    }
+
+    // 4. Ошибки валидации @Valid (400)
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(
-            MethodArgumentNotValidException ex,
-            HttpServletRequest request
-    ) {
-        String message = ex.getBindingResult()
-                .getFieldErrors()
-                .stream()
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .findFirst()
-                .orElse("Validation error");
+                .collect(Collectors.joining(", "));
 
-        ErrorResponse response = new ErrorResponse(
-                LocalDateTime.now(),
+        ErrorResponse error = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
-                HttpStatus.BAD_REQUEST.getReasonPhrase(),
-                message,
-                request.getRequestURI()
+                "Ошибка валидации: " + message,
+                LocalDateTime.now()
         );
-
-        return ResponseEntity.badRequest().body(response);
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
-    // 500 — всё остальное
+    // 5. Универсальный обработчик (500)
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleOtherExceptions(
-            Exception ex,
-            HttpServletRequest request
-    ) {
-        ErrorResponse response = new ErrorResponse(
-                LocalDateTime.now(),
+    public ResponseEntity<ErrorResponse> handleGlobal(Exception ex) {
+        ErrorResponse error = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
-                "Unexpected error",
-                request.getRequestURI()
+                "Внутренняя ошибка сервера: " + ex.getMessage(),
+                LocalDateTime.now()
         );
-
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

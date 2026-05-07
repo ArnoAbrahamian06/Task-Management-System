@@ -4,6 +4,7 @@ spring:
 
   datasource:
     url: jdbc:postgresql://84.54.30.160:5432/test_db
+#    url : jdbc:postgresql://localhost:5432/tms_db
     username: test_user
     password: 123_psw
 
@@ -19,9 +20,14 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    baseline-on-migrate: true
 
 server:
   port: 8080
+
+jwt:
+  secret: ARNOABRAMIANIGORFURSOVLIZALAGEREVA
+  expiration: 86400000  # 24 часа в миллисекундах
 
 springdoc:
   api-docs:

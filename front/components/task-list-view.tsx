@@ -59,7 +59,7 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<"deadline" | "priority" | "created">("deadline")
 
-  const filteredTasks = tasks
+  const filteredTasks = (tasks || [])
     .filter((t) => filterStatus === "all" || t.status === filterStatus)
     .filter((t) => filterPriority === "all" || t.priority === filterPriority)
     .filter((t) => searchQuery === "" || t.title.toLowerCase().includes(searchQuery.toLowerCase()))

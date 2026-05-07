@@ -15,6 +15,7 @@ import { NotificationsView } from "@/components/notifications-view"
 import { ProjectsView } from "@/components/projects-view"
 import { CreateTaskDialog } from "@/components/create-task-dialog"
 import { CreateProjectDialog } from "@/components/create-project-dialog"
+import { AuthView } from "@/components/auth-view"
 import type { Task } from "@/lib/data"
 
 const viewTitles: Record<string, { title: string; subtitle: string }> = {
@@ -36,13 +37,28 @@ export default function Page() {
 }
 
 function AppContent() {
-  const { tasks, loading } = useTaskContext()
+  const { tasks, loading, user, authenticated, authLoading, login, register, logout } = useTaskContext()
   const [activeView, setActiveView] = useState("dashboard")
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [createTaskOpen, setCreateTaskOpen] = useState(false)
   const [createProjectOpen, setCreateProjectOpen] = useState(false)
 
   const headerInfo = viewTitles[activeView] || { title: "TaskFlow", subtitle: "" }
+
+  if (authLoading) {
+    return (
+      <div className="flex h-svh items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Checking authentication...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authenticated) {
+    return <AuthView onLogin={login} onRegister={register} />
+  }
 
   // Keep selected task in sync with context
   const currentSelectedTask = selectedTask
@@ -75,6 +91,8 @@ function AppContent() {
               subtitle={headerInfo.subtitle}
               onCreateTask={() => setCreateTaskOpen(true)}
               onNotificationsClick={() => setActiveView("notifications")}
+              currentUser={user ?? undefined}
+              onLogout={logout}
             />
 
             <div className="flex flex-1 overflow-hidden">

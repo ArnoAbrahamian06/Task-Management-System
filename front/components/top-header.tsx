@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { users } from "@/lib/data"
+import type { User } from "@/lib/data"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,9 +18,11 @@ interface TopHeaderProps {
   title: string
   subtitle?: string
   onCreateTask?: () => void
+  currentUser?: User
+  onLogout?: () => void
 }
 
-export function TopHeader({ title, subtitle, onCreateTask }: TopHeaderProps) {
+export function TopHeader({ title, subtitle, onCreateTask, currentUser, onLogout }: TopHeaderProps) {
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
       <div className="flex items-center gap-3">
@@ -105,7 +107,7 @@ export function TopHeader({ title, subtitle, onCreateTask }: TopHeaderProps) {
             <Button variant="ghost" size="icon" className="size-8">
               <Avatar className="size-7">
                 <AvatarFallback className="bg-primary/20 text-primary text-xs font-medium">
-                  {users[0].avatar}
+                  {currentUser?.avatar ?? "GU"}
                 </AvatarFallback>
               </Avatar>
               <span className="sr-only">User menu</span>
@@ -113,14 +115,16 @@ export function TopHeader({ title, subtitle, onCreateTask }: TopHeaderProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <div className="px-3 py-2">
-              <p className="text-sm font-medium">{users[0].name}</p>
-              <p className="text-xs text-muted-foreground">{users[0].email}</p>
+              <p className="text-sm font-medium">{currentUser?.name ?? "Guest"}</p>
+              <p className="text-xs text-muted-foreground">{currentUser?.email ?? ""}</p>
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Preferences</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Log out</DropdownMenuItem>
+            <DropdownMenuItem onClick={onLogout} className="text-destructive">
+              Log out
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

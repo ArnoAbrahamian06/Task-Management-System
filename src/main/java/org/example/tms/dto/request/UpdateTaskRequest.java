@@ -26,10 +26,6 @@ public class UpdateTaskRequest {
 
     private LocalDateTime deadline;
 
-    private Long TasksCount;
-
-    private Long CompletedTasksCount;
-
     private Long assigneeId;
 }
 

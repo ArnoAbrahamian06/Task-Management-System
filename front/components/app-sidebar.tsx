@@ -28,8 +28,8 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { projects, users } from "@/lib/data"
 import { cn } from "@/lib/utils"
+import { useTaskContext } from "@/lib/task-context"
 
 const navMain = [
   { title: "Dashboard", icon: LayoutDashboard, id: "dashboard", badge: null },
@@ -50,6 +50,8 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
+  const { user, projects } = useTaskContext()
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
@@ -170,15 +172,15 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" tooltip={users[0].name}>
+            <SidebarMenuButton size="lg" tooltip={user?.name ?? "User"}>
               <Avatar className="size-7">
                 <AvatarFallback className="bg-primary/20 text-primary text-xs font-medium">
-                  {users[0].avatar}
+                  {user?.avatar ?? "U"}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col">
-                <span className="text-sm font-medium">{users[0].name}</span>
-                <span className="text-xs text-muted-foreground">{users[0].role}</span>
+                <span className="text-sm font-medium">{user?.name ?? "User"}</span>
+                <span className="text-xs text-muted-foreground">{user?.role ?? "Member"}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>

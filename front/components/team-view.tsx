@@ -42,14 +42,14 @@ const roleColors: Record<string, string> = {
 }
 
 export function TeamView() {
-  const { users, tasks } = useTaskContext()
+  const { teamMembers, tasks } = useTaskContext()
   const [searchQuery, setSearchQuery] = useState("")
   const [filterRole, setFilterRole] = useState<string>("all")
   const [inviteOpen, setInviteOpen] = useState(false)
 
-  const roles = [...new Set(users.map((u) => u.role))]
+  const roles = [...new Set(teamMembers.map((u) => u.role))]
 
-  const filteredUsers = users
+  const filteredUsers = teamMembers
     .filter((u) => filterRole === "all" || u.role === filterRole)
     .filter((u) =>
       searchQuery === "" ||
@@ -58,7 +58,7 @@ export function TeamView() {
     )
 
   const activeTasks = tasks.filter((t) => t.status !== "done")
-  const totalActive = users.filter((u) =>
+  const totalActive = teamMembers.filter((u) =>
     activeTasks.some((t) => t.assigneeId === u.id)
   ).length
 
@@ -67,7 +67,7 @@ export function TeamView() {
       {/* Stats bar */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card/50 px-4 py-3">
         <div className="flex items-center gap-6">
-          <StatPill icon={Users} label="Total Members" value={users.length} />
+          <StatPill icon={Users} label="Total Members" value={teamMembers.length} />
           <StatPill icon={CheckCircle2} label="Active Now" value={totalActive} />
           <StatPill icon={Clock} label="Tasks In Progress" value={activeTasks.length} />
         </div>

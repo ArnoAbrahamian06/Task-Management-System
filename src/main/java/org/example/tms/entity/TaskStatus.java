@@ -1,7 +1,9 @@
 package org.example.tms.entity;
 
 public enum TaskStatus {
-    TODO,
+    NEW,
     IN_PROGRESS,
-    DONE
+    REVIEW,
+    DONE,
+    DEFERRED
 }

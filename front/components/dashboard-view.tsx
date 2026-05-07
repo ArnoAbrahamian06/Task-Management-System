@@ -17,15 +17,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import {
-  tasks,
-  users,
-  projects,
-  getUserById,
-  getProjectById,
   statusLabels,
   priorityLabels,
   type Task,
 } from "@/lib/data"
+import { useTaskContext } from "@/lib/task-context"
 import { cn } from "@/lib/utils"
 
 interface DashboardViewProps {
@@ -33,12 +29,23 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ onTaskClick }: DashboardViewProps) {
-  const totalTasks = tasks.length
-  const completedTasks = tasks.filter((t) => t.status === "done").length
-  const inProgressTasks = tasks.filter((t) => t.status === "in_progress").length
-  const overdueTasks = tasks.filter(
-    (t) => new Date(t.deadline) < new Date() && t.status !== "done"
-  ).length
+  const { 
+    tasks, 
+    users, 
+    projects, 
+    teamMembers, 
+    getUserById, 
+    getProjectById,
+    totalTasksCount,
+    completedTasksCount,
+    inProgressTasksCount,
+    overdueTasksCount
+  } = useTaskContext()
+
+  const totalTasks = totalTasksCount
+  const completedTasks = completedTasksCount
+  const inProgressTasks = inProgressTasksCount
+  const overdueTasks = overdueTasksCount
 
   const urgentTasks = tasks
     .filter((t) => t.status !== "done" && (t.priority === "urgent" || t.priority === "high"))
@@ -238,7 +245,7 @@ export function DashboardView({ onTaskClick }: DashboardViewProps) {
           </CardHeader>
           <CardContent className="pb-4">
             <div className="flex flex-col gap-3">
-              {users.map((user) => {
+              {teamMembers.map((user) => {
                 const userTasks = tasks.filter((t) => t.assigneeId === user.id && t.status !== "done")
                 return (
                   <div key={user.id} className="flex items-center gap-3">

@@ -1,47 +1,41 @@
 package org.example.tms.mapper;
 
-import lombok.RequiredArgsConstructor;
 import org.example.tms.dto.ProjectShortDto;
 import org.example.tms.dto.request.CreateProjectRequest;
+import org.example.tms.dto.request.UpdateProjectRequest;
 import org.example.tms.dto.response.ProjectResponse;
 import org.example.tms.entity.Project;
-import org.example.tms.entity.User;
-import org.springframework.stereotype.Component;
+import org.example.tms.entity.Team;
+import org.mapstruct.*;
 
-import java.util.stream.Collectors;
+@Mapper(componentModel = "spring")
+public interface ProjectMapper {
 
-@Component
-@RequiredArgsConstructor
-public class ProjectMapper {
+    // Маппинг из DTO и объекта Team в сущность Project
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "tasksCount", constant = "0L")
+    @Mapping(target = "completedCount", constant = "0L")
+    @Mapping(target = "team", source = "team")
+    @Mapping(target = "name", source = "dto.name")
+    @Mapping(target = "description", source = "dto.description")
+    Project toEntity(CreateProjectRequest dto, Team team);
 
-    private final UserMapper userMapper;
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "team", ignore = true)
+    @Mapping(target = "owner", ignore = true)
+    @Mapping(target = "tasksCount", ignore = true)
+    @Mapping(target = "completedCount", ignore = true)
+    void updateEntityFromDto(UpdateProjectRequest dto, @MappingTarget Project project);
 
-    public Project toEntity(CreateProjectRequest dto, User owner) {
-        Project project = new Project();
-        project.setName(dto.getName());
-        project.setDescription(dto.getDescription());
-        project.setOwner(owner);
-        return project;
-    }
+    // Маппинг из сущности в Response
+    @Mapping(target = "teamId", source = "project.team.id")
+    @Mapping(target = "teamName", source = "project.team.name")
+    @Mapping(target = "tasksCount", source = "project.tasksCount")
+    @Mapping(target = "completedCount", source = "project.completedCount")
+    ProjectResponse toResponse(Project project);
 
-    public ProjectResponse toResponse(Project project) {
-        return new ProjectResponse(
-                project.getId(),
-                project.getName(),
-                project.getDescription(),
-                userMapper.toShortDto(project.getOwner()),
-                project.getMembers().stream()
-                        .map(userMapper::toShortDto)
-                        .collect(Collectors.toSet()),
-                project.getCreatedAt(),
-                project.getUpdatedAt()
-        );
-    }
-
-    public ProjectShortDto toShortDto(Project project) {
-        return new ProjectShortDto(
-                project.getId(),
-                project.getName()
-        );
-    }
+    ProjectShortDto toShortDto(Project project);
 }

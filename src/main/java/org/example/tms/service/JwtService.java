@@ -2,6 +2,7 @@ package org.example.tms.service;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -18,8 +19,11 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    // Ключ должен быть длинным (минимум 32 символа для HS256)
-    private static final String SECRET_KEY = "ARNOABRAMIANIGORFURSOVLIZALAGEREVA";
+    @Value("${jwt.secret}")
+    private String secretKey;
+
+    @Value("${jwt.expiration}000")
+    private long jwtExpiration;
 
     public String generateToken(UserDetails userDetails) {
         return generateToken(new HashMap<>(), userDetails);
@@ -30,8 +34,8 @@ public class JwtService {
                 .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24)) // 24 часа
-                .signWith(getSignInKey(), SignatureAlgorithm.HS256) // Новый способ подписи
+                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
@@ -58,7 +62,7 @@ public class JwtService {
     }
 
     private Key getSignInKey() {
-        byte[] keyBytes = SECRET_KEY.getBytes();
+        byte[] keyBytes = secretKey.getBytes();
         return Keys.hmacShaKeyFor(keyBytes);
     }
 

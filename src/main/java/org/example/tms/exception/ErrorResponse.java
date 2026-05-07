@@ -1,17 +1,14 @@
 package org.example.tms.exception;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import java.time.LocalDateTime;
 
-@Getter
+@Data
 @AllArgsConstructor
 public class ErrorResponse {
-
+    private int status;         // HTTP код (404, 403 и т.д.)
+    private String message;     // Описание ошибки
     private LocalDateTime timestamp;
-    private int status;
-    private String error;
-    private String message;
-    private String path;
 }
