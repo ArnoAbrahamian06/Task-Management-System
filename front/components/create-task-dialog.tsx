@@ -29,8 +29,6 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
   const [projectId, setProjectId] = useState(projects[0]?.id || "")
   const [assigneeId, setAssigneeId] = useState(teamMembers[0]?.id || "")
   const [deadline, setDeadline] = useState("")
-  const [tags, setTags] = useState("")
-  const [timeEstimate, setTimeEstimate] = useState("")
 
   const resetForm = () => {
     setTitle("")
@@ -40,8 +38,6 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     setProjectId(projects[0]?.id || "")
     setAssigneeId(teamMembers[0]?.id || "")
     setDeadline("")
-    setTags("")
-    setTimeEstimate("")
   }
 
   const handleSubmit = async () => {
@@ -56,11 +52,6 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
         projectId,
         assigneeId,
         deadline: deadline || undefined,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        timeEstimate: timeEstimate ? Number(timeEstimate) : undefined,
       })
       resetForm()
       onOpenChange(false)
@@ -160,37 +151,13 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
             </FormField>
           </div>
 
-          {/* Row: Deadline + Time Estimate */}
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Deadline">
-              <input
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </FormField>
-
-            <FormField label="Time estimate (hours)">
-              <input
-                type="number"
-                min="0"
-                value={timeEstimate}
-                onChange={(e) => setTimeEstimate(e.target.value)}
-                placeholder="0"
-                className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </FormField>
-          </div>
-
-          {/* Tags */}
-          <FormField label="Tags" hint="Comma-separated">
+          {/* Deadline */}
+          <FormField label="Deadline">
             <input
-              type="text"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="frontend, design, urgent..."
-              className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </FormField>
         </div>

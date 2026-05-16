@@ -62,7 +62,7 @@ function AppContent() {
 
   // Keep selected task in sync with context
   const currentSelectedTask = selectedTask
-    ? tasks.find((t) => t.id === selectedTask.id) || null
+    ? tasks.find((t) => t.id === selectedTask.id) || selectedTask
     : null
 
   if (loading) {

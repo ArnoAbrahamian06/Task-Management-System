@@ -4,7 +4,8 @@ import { Calendar, MessageSquare, Paperclip, Clock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
-import { type Task, getUserById, getProjectById, priorityLabels } from "@/lib/data"
+import { type Task, priorityLabels } from "@/lib/data"
+import { useTaskContext } from "@/lib/task-context"
 import { cn } from "@/lib/utils"
 
 interface TaskCardProps {
@@ -13,23 +14,11 @@ interface TaskCardProps {
   variant?: "kanban" | "compact"
 }
 
-const priorityColors: Record<string, string> = {
-  urgent: "bg-destructive/15 text-destructive border-destructive/20",
-  high: "bg-warning/15 text-warning-foreground border-warning/20",
-  medium: "bg-info/15 text-info border-info/20",
-  low: "bg-muted text-muted-foreground border-border",
-}
-
-const priorityDots: Record<string, string> = {
-  urgent: "bg-destructive",
-  high: "bg-warning",
-  medium: "bg-info",
-  low: "bg-muted-foreground",
-}
-
 export function TaskCard({ task, onClick, variant = "kanban" }: TaskCardProps) {
+  const { getUserById, getProjectById } = useTaskContext()
   const assignee = getUserById(task.assigneeId)
   const project = getProjectById(task.projectId)
+  const projectName = project?.name ?? task.projectName
   const subtasksDone = task.subtasks.filter((s) => s.done).length
   const subtasksTotal = task.subtasks.length
   const progress = subtasksTotal > 0 ? (subtasksDone / subtasksTotal) * 100 : 0
@@ -46,8 +35,8 @@ export function TaskCard({ task, onClick, variant = "kanban" }: TaskCardProps) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
           <div className="flex items-center gap-2 mt-1">
-            {project && (
-              <span className="text-xs text-muted-foreground">{project.name}</span>
+            {projectName && (
+              <span className="text-xs text-muted-foreground">{projectName}</span>
             )}
           </div>
         </div>

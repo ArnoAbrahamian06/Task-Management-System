@@ -26,12 +26,12 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import {
   type Task,
-  getUserById,
-  getProjectById,
   statusLabels,
   priorityLabels,
+  priorityColors,
   type Status,
 } from "@/lib/data"
+import { useTaskContext } from "@/lib/task-context"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -54,18 +54,13 @@ const statusColors: Record<Status, string> = {
   deferred: "bg-muted text-muted-foreground border-border",
 }
 
-const priorityColors: Record<string, string> = {
-  urgent: "bg-destructive/15 text-destructive",
-  high: "bg-warning/15 text-warning-foreground",
-  medium: "bg-info/15 text-info",
-  low: "bg-muted text-muted-foreground",
-}
-
 export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
+  const { getUserById, getProjectById } = useTaskContext()
   const [newComment, setNewComment] = useState("")
   const assignee = getUserById(task.assigneeId)
   const creator = getUserById(task.creatorId)
   const project = getProjectById(task.projectId)
+  const projectName = project?.name ?? task.projectName
   const subtasksDone = task.subtasks.filter((s) => s.done).length
   const subtasksTotal = task.subtasks.length
   const progress = subtasksTotal > 0 ? (subtasksDone / subtasksTotal) * 100 : 0
@@ -154,10 +149,10 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
           </MetaItem>
 
           <MetaItem icon={FolderOpen} label="Project">
-            {project && (
+            {projectName && (
               <div className="flex items-center gap-2">
-                <span className="size-2.5 rounded-sm" style={{ backgroundColor: project.color }} />
-                <span className="text-sm text-foreground">{project.name}</span>
+                <span className="size-2.5 rounded-sm" style={{ backgroundColor: project?.color ?? undefined }} />
+                <span className="text-sm text-foreground">{projectName}</span>
               </div>
             )}
           </MetaItem>

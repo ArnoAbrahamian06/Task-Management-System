@@ -33,7 +33,8 @@ export function AuthView({ onLogin, onRegister }: AuthViewProps) {
       }
     } catch (err) {
       console.error(err)
-      setError("Authentication failed. Please check your credentials and try again.")
+      const message = err instanceof Error ? err.message : "Authentication failed. Please check your credentials and try again."
+      setError(message)
     } finally {
       setLoading(false)
     }

@@ -55,7 +55,7 @@ import {
   defaultSettings as mockSettings,
 } from "./data"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
 const DEFAULT_TEAM_ID = Number(process.env.NEXT_PUBLIC_DEFAULT_TEAM_ID ?? 1)
 
 type ApiTaskStatus = "TODO" | "IN_PROGRESS" | "DONE"
@@ -70,8 +70,10 @@ interface ApiTaskResponse {
   deadline?: string
   project: { id: string | number; name: string }
   assignee: { id: string | number; name?: string; email?: string }
+  creator?: { id: string | number; name?: string; email?: string } | null
   createdAt: string
   updatedAt: string
+  subtasks?: ApiSubtaskResponse[]
 }
 
 interface ApiProjectResponse {
@@ -174,67 +176,116 @@ function clearAuthToken() {
   localStorage.removeItem("taskflow_token")
 }
 
-function getHeaders(hasBody = false): Record<string, string> {
+function getHeaders(hasBody = false, skipAuth = false): Record<string, string> {
   const token = getAuthToken()
   return {
     ...(hasBody ? { "Content-Type": "application/json" } : {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(!skipAuth && token ? { Authorization: `Bearer ${token}` } : {}),
   }
 }
 
-async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(input: RequestInfo, init?: RequestInit, skipAuth = false): Promise<T> {
   const hasBody = init?.body !== undefined
-  const response = await fetch(input, {
-    headers: {
-      ...getHeaders(hasBody),
-      ...(init?.headers ?? {}),
-    },
-    ...init,
-  })
+  let response: Response
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(
-      `Request failed (${response.status} ${response.statusText})${text ? `: ${text}` : ""}`
-    )
-  }
-
-  return response.json()
-}
-
-async function fetchToken(input: RequestInfo, init?: RequestInit): Promise<string> {
-  const hasBody = init?.body !== undefined
-  const response = await fetch(input, {
-    headers: {
-      ...getHeaders(hasBody),
-      ...(init?.headers ?? {}),
-    },
-    ...init,
-  })
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(
-      `Request failed (${response.status} ${response.statusText})${text ? `: ${text}` : ""}`
-    )
-  }
-
-  const text = await response.text()
   try {
-    return JSON.parse(text)
-  } catch {
-    return text.trim()
+    response = await fetch(input, {
+      headers: {
+        ...getHeaders(hasBody, skipAuth),
+        ...(init?.headers ?? {}),
+      },
+      ...init,
+    })
+  } catch (err) {
+    throw new Error(
+      `Network request failed: ${err instanceof Error ? err.message : String(err)}`
+    )
   }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "")
+    throw new Error(
+      `Request failed (${response.status} ${response.statusText})${text ? `: ${text}` : ""}`
+    )
+  }
+
+  // Check if response has content
+  const contentLength = response.headers.get('content-length')
+  const contentType = response.headers.get('content-type')
+
+  if (contentLength === '0' || !contentType?.includes('application/json')) {
+    // Return empty object for responses without JSON content
+    return {} as T
+  }
+
+  try {
+    return await response.json()
+  } catch (err) {
+    console.warn(`Failed to parse JSON response from ${input}:`, err)
+    // Return empty object as fallback
+    return {} as T
+  }
+}
+
+async function fetchToken(input: RequestInfo, init?: RequestInit, skipAuth = false): Promise<string> {
+  const hasBody = init?.body !== undefined
+  let response: Response
+
+  try {
+    response = await fetch(input, {
+      headers: {
+        ...getHeaders(hasBody, skipAuth),
+        ...(init?.headers ?? {}),
+      },
+      ...init,
+    })
+  } catch (err) {
+    throw new Error(
+      `Network request failed: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
+
+  const text = await response.text().catch(() => "")
+
+  if (!response.ok) {
+    throw new Error(
+      `Request failed (${response.status} ${response.statusText})${text ? `: ${text}` : ""}`
+    )
+  }
+
+  try {
+    const parsed = JSON.parse(text)
+    if (typeof parsed === "string") return parsed
+    if (parsed && typeof parsed === "object") {
+      if (typeof (parsed as Record<string, unknown>).token === "string") {
+        return (parsed as Record<string, string>).token
+      }
+      if (typeof (parsed as Record<string, unknown>).accessToken === "string") {
+        return (parsed as Record<string, string>).accessToken
+      }
+    }
+  } catch {
+    // ignore invalid JSON and fallback to raw text
+  }
+
+  return text.trim()
 }
 
 export async function getCurrentUser(): Promise<User> {
-  const data = await fetchJson<ApiUserResponse>(`${API_BASE_URL}/api/users/me`)
-  return {
-    id: normalizeId(data.id),
-    name: data.name,
-    avatar: toAvatar(data.name),
-    role: data.role,
-    email: data.email,
+  try {
+    const data = await fetchJson<ApiUserResponse>(`${API_BASE_URL}/api/users/me`)
+    return {
+      id: normalizeId(data.id),
+      name: data.name,
+      avatar: toAvatar(data.name),
+      role: data.role,
+      email: data.email,
+    }
+  } catch (err) {
+    if (err instanceof Error && /(401|403)/.test(err.message)) {
+      logout()
+    }
+    throw err
   }
 }
 
@@ -242,7 +293,7 @@ export async function login(email: string, password: string): Promise<User> {
   const token = await fetchToken(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
     body: JSON.stringify({ email, password }),
-  })
+  }, true)
 
   setAuthToken(token)
   return getCurrentUser()
@@ -252,7 +303,7 @@ export async function register(name: string, email: string, password: string): P
   await fetchJson<ApiUserResponse>(`${API_BASE_URL}/api/auth/register`, {
     method: "POST",
     body: JSON.stringify({ name, email, password }),
-  })
+  }, true)
 
   return login(email, password)
 }
@@ -262,15 +313,16 @@ export function logout(): void {
 }
 
 function mapApiTask(task: ApiTaskResponse): Task {
-  return {
+  const mapped = {
     id: normalizeId(task.id),
     title: task.title,
     description: task.description ?? "",
     status: apiStatusToStatus[task.status] ?? "new",
     priority: apiPriorityToPriority[task.priority] ?? "medium",
     assigneeId: normalizeId(task.assignee?.id ?? "u1"),
-    creatorId: normalizeId(task.assignee?.id ?? "u1"),
+    creatorId: task.creator ? normalizeId(task.creator.id) : normalizeId(task.assignee?.id ?? "u1"),
     projectId: normalizeId(task.project?.id ?? "p1"),
+    projectName: task.project?.name ?? "",
     tags: [],
     deadline:
       task.deadline?.split("T")[0] ||
@@ -278,10 +330,16 @@ function mapApiTask(task: ApiTaskResponse): Task {
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
     comments: [],
-    subtasks: [],
+    subtasks: (task.subtasks ?? []).map((s) => ({
+      id: normalizeId(s.id),
+      title: s.title ?? "",
+      done: s.completed,
+    })),
     timeEstimate: 0,
     timeSpent: 0,
   }
+  console.log("Mapped task:", mapped)
+  return mapped
 }
 
 function mapApiProject(project: ApiProjectResponse, color = "#64748b"): Project {
@@ -328,6 +386,21 @@ export async function getTasks(): Promise<Task[]> {
   return _tasks
 }
 
+export async function getTopPriorityTasks(): Promise<Task[]> {
+  try {
+    const data = await fetchJson<ApiTaskResponse[]>(
+      `${API_BASE_URL}/api/tasks/my/top-priority`
+    )
+    return data.map(mapApiTask)
+  } catch (err) {
+    console.warn("Failed to load top priority tasks from API.", err)
+    return _tasks
+      .filter((t) => t.status !== "done" && (t.priority === "urgent" || t.priority === "high"))
+      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+      .slice(0, 5)
+  }
+}
+
 export async function getTaskById(id: string): Promise<Task | undefined> {
   return _tasks.find((t) => t.id === id)
 }
@@ -355,11 +428,20 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     assigneeId: input.assigneeId ? Number(input.assigneeId) : undefined,
   }
 
+  console.log("Creating task with payload:", payload)
+
   try {
     const result = await fetchJson<ApiTaskResponse>(`${API_BASE_URL}/api/tasks`, {
       method: "POST",
       body: JSON.stringify(payload),
     })
+
+    // Check if we got a valid response with task data
+    if (!result || !result.id) {
+      console.warn("API returned empty or invalid response, using local fallback")
+      throw new Error("Invalid API response")
+    }
+
     const task = mapApiTask(result)
     task.tags = input.tags ?? []
     task.timeEstimate = input.timeEstimate ?? 0
@@ -513,6 +595,7 @@ export async function getProjects(): Promise<Project[]> {
   try {
     const data = await fetchJson<ApiProjectResponse[]>(`${API_BASE_URL}/api/projects/my`)
     const projects = data.map((project) => mapApiProject(project))
+    console.log("Loaded projects:", projects)
     _projects = [...projects]
     return projects
   } catch (err) {
@@ -596,6 +679,7 @@ export async function deleteProject(id: string): Promise<void> {
 export async function getMyTeamMembers(): Promise<User[]> {
   try {
     const data = await fetchJson<ApiTeamWithMembersResponse[]>(`${API_BASE_URL}/api/teams/my-with-members`)
+    console.log("Team members API response:", data)
 
     const membersById = new Map<string, User>()
     data.forEach((team) => {
@@ -614,7 +698,9 @@ export async function getMyTeamMembers(): Promise<User[]> {
       })
     })
 
-    return Array.from(membersById.values())
+    const result = Array.from(membersById.values())
+    console.log("Mapped team members:", result)
+    return result
   } catch (err) {
     console.warn("Failed to load team members from API.", err)
     return []
@@ -624,7 +710,9 @@ export async function getMyTeamMembers(): Promise<User[]> {
 export async function getUsers(): Promise<User[]> {
   try {
     const data = await fetchJson<ApiUserResponse[]>(`${API_BASE_URL}/api/admin/users`)
-    return data.map(mapApiUser)
+    const result = data.map(mapApiUser)
+    console.log("Admin users:", result)
+    return result
   } catch (err) {
     console.warn("Failed to load users from API.", err)
     return []

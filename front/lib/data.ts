@@ -32,6 +32,7 @@ export interface Task {
   assigneeId: string
   creatorId: string
   projectId: string
+  projectName?: string
   tags: string[]
   deadline: string
   createdAt: string
@@ -421,6 +422,20 @@ export const priorityLabels: Record<Priority, string> = {
   high: "High",
   medium: "Medium",
   low: "Low",
+}
+
+export const priorityColors: Record<Priority, string> = {
+  urgent: "bg-destructive/15 text-destructive border-destructive/20",
+  high: "bg-warning/15 text-warning border-warning/20",
+  medium: "bg-info/15 text-info border-info/20",
+  low: "bg-muted text-muted-foreground border-border",
+}
+
+export const priorityDotColors: Record<Priority, string> = {
+  urgent: "bg-destructive",
+  high: "bg-warning",
+  medium: "bg-info",
+  low: "bg-muted-foreground",
 }
 
 export function getUserById(id: string) {

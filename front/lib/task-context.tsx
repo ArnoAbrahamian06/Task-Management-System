@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import type { Task, Project, User, Notification, AppSettings } from "./data"
 import * as api from "./api"
 import type { CreateTaskInput, CreateProjectInput } from "./api"
+import { activityHistoryUtils } from "./activity-history"
 
 interface TaskContextValue {
   // Data
@@ -77,12 +78,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [overdueTasksCount, setOverdueTasksCount] = useState(0)
 
   const loadData = useCallback(async () => {
+    const isAdmin = Boolean(user?.role?.toLowerCase().includes("admin"))
+
     try {
-      const [t, p, u, m, n, s, total, completed, inProgress, overdue] = await Promise.all([
+      const [t, p, m, u, n, s, total, completed, inProgress, overdue] = await Promise.all([
         api.getTasks(),
         api.getProjects(),
-        api.getUsers(),
         api.getMyTeamMembers(),
+        isAdmin ? api.getUsers() : Promise.resolve<User[]>([]),
         api.getNotifications(),
         api.getSettings(),
         api.getTotalTasksCount(),
@@ -92,7 +95,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       ])
       setTasks(t)
       setProjects(p)
-      setUsers(u.length ? u : m)
+      setUsers(isAdmin && u.length ? u : m)
       setTeamMembers(m)
       setNotifications(n)
       setSettings(s)
@@ -100,12 +103,13 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       setCompletedTasksCount(completed)
       setInProgressTasksCount(inProgress)
       setOverdueTasksCount(overdue)
+      console.log("Loaded data:", { tasks: t, projects: p, users: isAdmin && u.length ? u : m, teamMembers: m })
     } catch (err) {
       console.error("Failed to load data:", err)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user])
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("taskflow_token") : null
@@ -203,12 +207,18 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const updateTaskAction = useCallback(async (id: string, updates: Partial<Task>) => {
     const updated = await api.updateTask(id, updates)
     setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)))
+    
+    // Record activity
+    if (user) {
+      activityHistoryUtils.addActivity(updated, user.id, user.name)
+    }
+    
     if (updates.status) {
       const updatedProjects = await api.getProjects()
       setProjects(updatedProjects)
     }
     await loadCounts()
-  }, [loadCounts])
+  }, [user, loadCounts])
 
   const deleteTaskAction = useCallback(async (id: string) => {
     await api.deleteTask(id)

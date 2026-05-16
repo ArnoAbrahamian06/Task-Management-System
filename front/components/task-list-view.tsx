@@ -20,11 +20,12 @@ import {
   type Task,
   type Priority,
   type Status,
-  getUserById,
-  getProjectById,
   statusLabels,
   priorityLabels,
+  priorityColors,
+  priorityDotColors,
 } from "@/lib/data"
+import { useTaskContext } from "@/lib/task-context"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -38,12 +39,7 @@ interface TaskListViewProps {
   onTaskClick: (task: Task) => void
 }
 
-const priorityDots: Record<string, string> = {
-  urgent: "bg-destructive",
-  high: "bg-warning",
-  medium: "bg-info",
-  low: "bg-muted-foreground",
-}
+const priorityDots: Record<string, string> = priorityDotColors
 
 const statusIcons: Record<Status, { icon: typeof Circle; color: string }> = {
   new: { icon: Circle, color: "text-info" },
@@ -54,6 +50,7 @@ const statusIcons: Record<Status, { icon: typeof Circle; color: string }> = {
 }
 
 export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
+  const { getUserById, getProjectById } = useTaskContext()
   const [filterStatus, setFilterStatus] = useState<Status | "all">("all")
   const [filterPriority, setFilterPriority] = useState<Priority | "all">("all")
   const [searchQuery, setSearchQuery] = useState("")
@@ -183,8 +180,10 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
 }
 
 function TaskListItem({ task, onClick }: { task: Task; onClick: () => void }) {
+  const { getUserById, getProjectById } = useTaskContext()
   const assignee = getUserById(task.assigneeId)
   const project = getProjectById(task.projectId)
+  const projectName = project?.name ?? task.projectName
   const subtasksDone = task.subtasks.filter((s) => s.done).length
   const subtasksTotal = task.subtasks.length
   const progress = subtasksTotal > 0 ? (subtasksDone / subtasksTotal) * 100 : 0
@@ -211,8 +210,8 @@ function TaskListItem({ task, onClick }: { task: Task; onClick: () => void }) {
           </div>
         </div>
         <div className="flex items-center gap-3 mt-0.5 md:hidden">
-          {project && (
-            <span className="text-xs text-muted-foreground">{project.name}</span>
+          {projectName && (
+            <span className="text-xs text-muted-foreground">{projectName}</span>
           )}
           <span className={cn("text-xs", isOverdue ? "text-destructive" : "text-muted-foreground")}>
             {formatDate(task.deadline)}
@@ -222,10 +221,10 @@ function TaskListItem({ task, onClick }: { task: Task; onClick: () => void }) {
 
       {/* Desktop columns */}
       <span className="hidden w-28 truncate text-xs text-muted-foreground md:block">
-        {project && (
+        {projectName && (
           <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-sm shrink-0" style={{ backgroundColor: project.color }} />
-            {project.name}
+            <span className="size-2 rounded-sm shrink-0" style={{ backgroundColor: project?.color }} />
+            {projectName}
           </span>
         )}
       </span>
@@ -233,13 +232,7 @@ function TaskListItem({ task, onClick }: { task: Task; onClick: () => void }) {
       <span className="hidden w-20 md:block">
         <Badge
           variant="outline"
-          className={cn(
-            "text-[10px] px-1.5 py-0 h-5 font-medium",
-            task.priority === "urgent" && "bg-destructive/15 text-destructive border-destructive/20",
-            task.priority === "high" && "bg-warning/15 text-warning border-warning/20",
-            task.priority === "medium" && "bg-info/15 text-info border-info/20",
-            task.priority === "low" && "bg-muted text-muted-foreground border-border",
-          )}
+          className={cn("text-[10px] px-1.5 py-0 h-5 font-medium", priorityColors[task.priority])}
         >
           {priorityLabels[task.priority]}
         </Badge>

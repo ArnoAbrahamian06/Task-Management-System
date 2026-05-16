@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import {
   CheckCircle2,
   Clock,
@@ -19,10 +20,13 @@ import { Progress } from "@/components/ui/progress"
 import {
   statusLabels,
   priorityLabels,
+  priorityDotColors,
   type Task,
 } from "@/lib/data"
 import { useTaskContext } from "@/lib/task-context"
+import { getTopPriorityTasks } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { useActivityHistory } from "@/hooks/use-activity-history"
 
 interface DashboardViewProps {
   onTaskClick: (task: Task) => void
@@ -31,9 +35,9 @@ interface DashboardViewProps {
 export function DashboardView({ onTaskClick }: DashboardViewProps) {
   const { 
     tasks, 
-    users, 
-    projects, 
-    teamMembers, 
+    users,
+    projects,
+    teamMembers,
     getUserById, 
     getProjectById,
     totalTasksCount,
@@ -41,6 +45,8 @@ export function DashboardView({ onTaskClick }: DashboardViewProps) {
     inProgressTasksCount,
     overdueTasksCount
   } = useTaskContext()
+
+  const { getRecentActivity } = useActivityHistory()
 
   const totalTasks = totalTasksCount
   const completedTasks = completedTasksCount
@@ -52,9 +58,34 @@ export function DashboardView({ onTaskClick }: DashboardViewProps) {
     .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
     .slice(0, 5)
 
-  const recentActivity = tasks
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 5)
+  const [priorityTasks, setPriorityTasks] = useState<Task[]>(urgentTasks)
+
+  useEffect(() => {
+    if (users.length === 0) return
+
+    const fetchPriorityTasks = async () => {
+      try {
+        const tasks = await getTopPriorityTasks()
+        console.log("Loaded priority tasks:", tasks)
+        setPriorityTasks(tasks)
+      } catch (err) {
+        console.error("Failed to load priority tasks:", err)
+        setPriorityTasks(urgentTasks)
+      }
+    }
+
+    // Initial fetch
+    void fetchPriorityTasks()
+
+    // Set up interval for every 30 seconds
+    const interval = setInterval(fetchPriorityTasks, 30000)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [users])
+
+  const recentActivityEntries = getRecentActivity(5)
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
@@ -108,13 +139,13 @@ export function DashboardView({ onTaskClick }: DashboardViewProps) {
                 Priority Tasks
               </CardTitle>
               <Badge variant="outline" className="text-[10px]">
-                {urgentTasks.length} tasks
+                {priorityTasks.length} tasks
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="pb-4">
             <div className="flex flex-col gap-2">
-              {urgentTasks.map((task) => {
+              {priorityTasks.map((task) => {
                 const assignee = getUserById(task.assigneeId)
                 const project = getProjectById(task.projectId)
                 const isOverdue = new Date(task.deadline) < new Date()
@@ -124,10 +155,7 @@ export function DashboardView({ onTaskClick }: DashboardViewProps) {
                     onClick={() => onTaskClick(task)}
                     className="flex items-center gap-3 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5 text-left transition-all hover:bg-accent/40 hover:border-primary/20"
                   >
-                    <span className={cn(
-                      "size-2 shrink-0 rounded-full",
-                      task.priority === "urgent" ? "bg-destructive" : "bg-warning"
-                    )} />
+                    <span className={cn("size-2 shrink-0 rounded-full", priorityDotColors[task.priority])} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -200,37 +228,46 @@ export function DashboardView({ onTaskClick }: DashboardViewProps) {
           </CardHeader>
           <CardContent className="pb-4">
             <div className="flex flex-col gap-3">
-              {recentActivity.map((task) => {
-                const assignee = getUserById(task.assigneeId)
+              {recentActivityEntries.map((entry) => {
+                const user = getUserById(entry.userId)
+                const task = tasks.find((t) => t.id === entry.taskId)
                 return (
                   <button
-                    key={task.id}
-                    onClick={() => onTaskClick(task)}
-                    className="flex items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/30"
+                    key={`${entry.taskId}-${entry.timestamp}`}
+                    onClick={() => {
+                      if (task) onTaskClick(task)
+                    }}
+                    disabled={!task}
+                    className="flex items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/30 disabled:opacity-50 disabled:cursor-default"
                   >
-                    {assignee && (
+                    {user && (
                       <Avatar className="size-7 shrink-0">
                         <AvatarFallback className="bg-secondary text-secondary-foreground text-[9px] font-medium">
-                          {assignee.avatar}
+                          {user.avatar}
                         </AvatarFallback>
                       </Avatar>
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-foreground truncate">
-                        <span className="font-medium">{assignee?.name}</span>
+                        <span className="font-medium">{user?.name || entry.userName}</span>
                         <span className="text-muted-foreground">{" updated "}</span>
-                        <span className="font-medium">{task.title}</span>
+                        <span className="font-medium">{entry.taskTitle}</span>
                       </p>
                       <span className="text-[10px] text-muted-foreground">
-                        {formatTimeAgo(task.updatedAt)}
+                        {formatTimeAgo(entry.timestamp)}
                       </span>
                     </div>
                     <Badge variant="outline" className="text-[10px] h-5 shrink-0">
-                      {statusLabels[task.status]}
+                      {statusLabels[entry.status as keyof typeof statusLabels] || entry.status}
                     </Badge>
                   </button>
                 )
               })}
+              {recentActivityEntries.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-4">
+                  No recent activity
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -341,3 +378,4 @@ function formatTimeAgo(dateStr: string): string {
   if (days === 1) return "Yesterday"
   return `${days}d ago`
 }
+
