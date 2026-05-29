@@ -26,6 +26,11 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 
     boolean existsByUserAndTeam(User user, Team team);
 
+    @Query("SELECT COUNT(tm) > 0 FROM TeamMember tm " +
+           "WHERE tm.user.id = :userId AND tm.team.id = :teamId " +
+           "AND UPPER(REPLACE(tm.position, ' ', '_')) = 'TEAM_LEAD'")
+    boolean isTeamLead(@Param("userId") Long userId, @Param("teamId") Long teamId);
+
 
     // Оптимизированный запрос для получения всех коллег во всех командах юзера
     // Помогает избежать проблемы N+1 при загрузке списков
@@ -34,4 +39,7 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
             "JOIN FETCH tm.team " +
             "WHERE tm.team.id IN (SELECT m.team.id FROM TeamMember m WHERE m.user = :user)")
     List<TeamMember> findAllCoworkersByUser(@Param("user") User user);
+
+    @Query("SELECT tm FROM TeamMember tm JOIN FETCH tm.user JOIN FETCH tm.team")
+    List<TeamMember> findAllWithUserAndTeam();
 }

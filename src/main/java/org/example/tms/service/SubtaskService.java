@@ -7,6 +7,7 @@ import org.example.tms.dto.request.UpdateSubtaskRequest;
 import org.example.tms.dto.response.SubtaskResponse;
 import org.example.tms.entity.Subtask;
 import org.example.tms.entity.Task;
+import org.example.tms.entity.TaskStatus;
 import org.example.tms.entity.User;
 import org.example.tms.mapper.SubtaskMapper;
 import org.example.tms.repository.SubtaskRepository;
@@ -43,8 +44,22 @@ public class SubtaskService {
         Subtask subtask = subtaskRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Подзадача не найдена"));
 
-        subtask.setDone(!subtask.isDone()); // Меняем true на false и наоборот
-        return subtaskMapper.toResponse(subtask); // Hibernate сам сохранит изменения в конце транзакции
+        subtask.setDone(!subtask.isDone());
+        Subtask savedSubtask = subtaskRepository.save(subtask);
+
+        // Проверяем все подзадачи родительской задачи
+        Task parentTask = savedSubtask.getTask();
+        if (parentTask != null && !parentTask.getSubtasks().isEmpty()) {
+            boolean allDone = parentTask.getSubtasks().stream()
+                    .allMatch(Subtask::isDone);
+            
+            if (allDone) {
+                parentTask.setStatus(TaskStatus.DONE);
+                taskRepository.save(parentTask);
+            }
+        }
+
+        return subtaskMapper.toResponse(savedSubtask);
     }
 
     @Transactional
@@ -63,23 +78,19 @@ public class SubtaskService {
     }
 
     @Transactional
-    public void updateSubtask(Long subtaskId, UpdateSubtaskRequest dto) {
+    public SubtaskResponse updateSubtask(Long subtaskId, UpdateSubtaskRequest dto) {
         // 1. Ищем подзадачу
         Subtask subtask = subtaskRepository.findById(subtaskId)
                 .orElseThrow(() -> new EntityNotFoundException("Subtask not found"));
 
         // 2. Проверяем права через родительскую задачу
         Task parentTask = subtask.getTask();
-        User currentUser = getCurrentUser();
         
-
         // 3. Обновляем поля
         subtaskMapper.updateSubtaskFromDto(dto, subtask);
 
-        // 4. (Опционально) Логика: если все подзадачи DONE, можно слать уведомление 
-        // или предлагать закрыть основную задачу.
-
-        subtaskRepository.save(subtask);
+        // 4. Сохраняем и возвращаем
+        return subtaskMapper.toResponse(subtaskRepository.save(subtask));
     }
     
     private User getCurrentUser() {

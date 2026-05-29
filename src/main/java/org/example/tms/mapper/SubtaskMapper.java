@@ -18,8 +18,10 @@ public interface SubtaskMapper {
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "task", ignore = true)
+    @Mapping(source = "completed", target = "done")
     void updateSubtaskFromDto(UpdateSubtaskRequest dto, @MappingTarget Subtask subtask);
 
     // Превращаем сущность в ответ для фронтенда
+    @Mapping(source = "done", target = "completed")
     SubtaskResponse toResponse(Subtask subtask);
 }

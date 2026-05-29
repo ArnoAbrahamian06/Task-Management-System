@@ -18,6 +18,7 @@ import {
   Pencil,
   Trash2,
   Copy,
+  Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -40,6 +41,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import { EditTaskDialog } from "./edit-task-dialog"
 
 interface TaskDetailPanelProps {
   task: Task
@@ -55,8 +57,42 @@ const statusColors: Record<Status, string> = {
 }
 
 export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
-  const { getUserById, getProjectById } = useTaskContext()
+  const { getUserById, getProjectById, toggleSubtask, addSubtask, updateSubtask, deleteSubtask, isTeamLeadOfProject, deleteTask } = useTaskContext()
+  const isLead = isTeamLeadOfProject(task.projectId)
+
   const [newComment, setNewComment] = useState("")
+  const [isAddingSubtask, setIsAddingSubtask] = useState(false)
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
+  const [subtaskLoading, setSubtaskLoading] = useState(false)
+  
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState("")
+  const [isEditingTask, setIsEditingTask] = useState(false)
+
+  const handleAddSubtask = async () => {
+    if (!newSubtaskTitle.trim()) return
+    setSubtaskLoading(true)
+    try {
+      await addSubtask(task.id, newSubtaskTitle.trim())
+      setNewSubtaskTitle("")
+      setIsAddingSubtask(false)
+    } catch (err) {
+      console.error("Failed to add subtask:", err)
+    } finally {
+      setSubtaskLoading(false)
+    }
+  }
+
+  const handleUpdateSubtask = async (subtaskId: string) => {
+    if (!editingSubtaskTitle.trim()) return
+    try {
+      await updateSubtask(task.id, subtaskId, { title: editingSubtaskTitle.trim() })
+      setEditingSubtaskId(null)
+    } catch (err) {
+      console.error("Failed to update subtask:", err)
+    }
+  }
+
   const assignee = getUserById(task.assigneeId)
   const creator = getUserById(task.creatorId)
   const project = getProjectById(task.projectId)
@@ -83,19 +119,35 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <Pencil className="mr-2 size-3.5" /> Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Copy className="mr-2 size-3.5" /> Duplicate
-              </DropdownMenuItem>
+              {isLead && (
+                <>
+                  <DropdownMenuItem onClick={() => setIsEditingTask(true)}>
+                    <Pencil className="mr-2 size-3.5" /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <Copy className="mr-2 size-3.5" /> Duplicate
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuItem>
                 <ExternalLink className="mr-2 size-3.5" /> Open in new tab
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
-                <Trash2 className="mr-2 size-3.5" /> Delete
-              </DropdownMenuItem>
+              {isLead && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="text-destructive"
+                    onClick={() => {
+                      if (confirm("Are you sure you want to delete this task?")) {
+                        deleteTask(task.id)
+                        onClose()
+                      }
+                    }}
+                  >
+                    <Trash2 className="mr-2 size-3.5" /> Delete
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={onClose}>
@@ -104,8 +156,14 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
         </div>
       </div>
 
+      <EditTaskDialog 
+        task={task} 
+        open={isEditingTask} 
+        onOpenChange={setIsEditingTask} 
+      />
+
       {/* Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto scrollbar-hide">
         <div className="px-5 py-4">
           {/* Title */}
           <h2 className="text-lg font-semibold text-foreground leading-snug">{task.title}</h2>
@@ -157,7 +215,7 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
             )}
           </MetaItem>
 
-          <MetaItem icon={Calendar} label="Deadline">
+          <MetaItem icon={Calendar} label="Deadline" className="col-span-2 items-center">
             <span className="text-sm text-foreground">
               {new Date(task.deadline).toLocaleDateString("en-US", {
                 month: "long",
@@ -167,21 +225,6 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
             </span>
           </MetaItem>
 
-          <MetaItem icon={Clock} label="Time">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-foreground">{task.timeSpent}h / {task.timeEstimate}h</span>
-            </div>
-          </MetaItem>
-
-          <MetaItem icon={Tag} label="Tags" className="col-span-2">
-            <div className="flex flex-wrap gap-1.5">
-              {task.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-xs bg-secondary/70 text-muted-foreground">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          </MetaItem>
         </div>
 
         <Separator />
@@ -203,41 +246,150 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
         <Separator />
 
         {/* Subtasks */}
-        {task.subtasks.length > 0 && (
-          <>
-            <div className="px-5 py-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-foreground flex items-center gap-2">
-                  <CheckSquare className="size-4" />
-                  Subtasks
-                </span>
-                <span className="text-xs text-muted-foreground">{subtasksDone}/{subtasksTotal}</span>
-              </div>
-              <Progress value={progress} className="h-1.5 mb-3" />
-              <div className="flex flex-col gap-2">
-                {task.subtasks.map((subtask) => (
-                  <label
-                    key={subtask.id}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors cursor-pointer",
-                      subtask.done
-                        ? "text-muted-foreground line-through bg-transparent"
-                        : "text-foreground hover:bg-accent/50"
-                    )}
-                  >
-                    {subtask.done ? (
-                      <CheckSquare className="size-4 shrink-0 text-success" />
-                    ) : (
-                      <Square className="size-4 shrink-0 text-muted-foreground" />
-                    )}
-                    {subtask.title}
-                  </label>
-                ))}
-              </div>
+        <div className="px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-foreground flex items-center gap-2">
+              <CheckSquare className="size-4" />
+              Subtasks
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{subtasksDone}/{subtasksTotal}</span>
+              {isLead && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6 h-6 w-6 rounded-full hover:bg-primary/10 hover:text-primary"
+                  onClick={() => setIsAddingSubtask(!isAddingSubtask)}
+                >
+                  <Plus className={cn("size-3.5 transition-transform", isAddingSubtask && "rotate-45")} />
+                </Button>
+              )}
             </div>
-            <Separator />
-          </>
-        )}
+          </div>
+          
+          <Progress value={progress} className="h-1.5 mb-3" />
+          
+          {isAddingSubtask && isLead && (
+
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                type="text"
+                autoFocus
+                placeholder="Add subtask..."
+                value={newSubtaskTitle}
+                onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newSubtaskTitle.trim()) {
+                    handleAddSubtask()
+                  } else if (e.key === "Escape") {
+                    setIsAddingSubtask(false)
+                    setNewSubtaskTitle("")
+                  }
+                }}
+                className="flex-1 bg-secondary/50 border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <Button 
+                size="sm" 
+                className="h-8 px-2" 
+                disabled={!newSubtaskTitle.trim() || subtaskLoading}
+                onClick={handleAddSubtask}
+              >
+                {subtaskLoading ? "..." : "Add"}
+              </Button>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            {task.subtasks.map((subtask) => (
+              <div
+                key={subtask.id}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors group",
+                  subtask.done
+                    ? "text-muted-foreground bg-transparent"
+                    : "text-foreground hover:bg-accent/50",
+                  subtask.id.toString().startsWith("temp-") && "opacity-50 pointer-events-none cursor-not-allowed"
+                )}
+              >
+                <div 
+                  className="flex items-center gap-2.5 flex-1 cursor-pointer"
+                  onClick={() => {
+                    console.log("Toggling subtask:", subtask.id, "for task:", task.id)
+                    toggleSubtask(task.id, subtask.id.toString())
+                  }}
+                >
+                  {subtask.done ? (
+                    <CheckSquare className="size-4 shrink-0 text-success fill-success/10" />
+                  ) : (
+                    <Square className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
+                  )}
+                  
+                  {editingSubtaskId === subtask.id.toString() ? (
+                    <input
+                      type="text"
+                      autoFocus
+                      className="flex-1 bg-background border border-primary rounded px-1 py-0.5 outline-none"
+                      value={editingSubtaskTitle}
+                      onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleUpdateSubtask(subtask.id.toString())
+                        if (e.key === "Escape") setEditingSubtaskId(null)
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className={cn(subtask.done && "line-through opacity-70")}>
+                      {subtask.title}
+                    </span>
+                  )}
+                </div>
+
+                {isLead && (
+                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    {editingSubtaskId === subtask.id.toString() ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-primary"
+                        onClick={() => handleUpdateSubtask(subtask.id.toString())}
+                      >
+                        <CheckSquare className="size-3.5" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setEditingSubtaskId(subtask.id.toString())
+                          setEditingSubtaskTitle(subtask.title)
+                        }}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        if (confirm("Delete this subtask?")) {
+                          deleteSubtask(task.id, subtask.id.toString())
+                        }
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {task.subtasks.length === 0 && !isAddingSubtask && (
+              <p className="text-xs text-muted-foreground text-center py-2 italic">No subtasks yet</p>
+            )}
+          </div>
+        </div>
+        <Separator />
 
         {/* Activity / Comments */}
         <div className="px-5 py-4">

@@ -31,7 +31,8 @@ interface ProjectsViewProps {
 }
 
 export function ProjectsView({ onCreateProject }: ProjectsViewProps) {
-  const { projects, tasks, users, deleteProject } = useTaskContext()
+  const { projects, tasks, users, deleteProject, isTeamLeadOfProject } = useTaskContext()
+  const isAnyProjectLead = projects.some((p) => isTeamLeadOfProject(p.id))
 
   return (
     <div className="flex h-full flex-col">
@@ -44,10 +45,12 @@ export function ProjectsView({ onCreateProject }: ProjectsViewProps) {
             {projects.length}
           </Badge>
         </div>
-        <Button size="sm" className="gap-1.5 text-xs" onClick={onCreateProject}>
-          <Plus className="size-3.5" />
-          New Project
-        </Button>
+        {isAnyProjectLead && (
+          <Button size="sm" className="gap-1.5 text-xs" onClick={onCreateProject}>
+            <Plus className="size-3.5" />
+            New Project
+          </Button>
+        )}
       </div>
 
       {/* Grid */}
@@ -91,25 +94,27 @@ export function ProjectsView({ onCreateProject }: ProjectsViewProps) {
                         )}
                       </div>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Pencil className="mr-2 size-3.5" /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => deleteProject(project.id)}
-                        >
-                          <Trash2 className="mr-2 size-3.5" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {isTeamLeadOfProject(project.id) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>
+                            <Pencil className="mr-2 size-3.5" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => deleteProject(project.id)}
+                          >
+                            <Trash2 className="mr-2 size-3.5" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
 
                   {/* Progress */}
@@ -162,15 +167,17 @@ export function ProjectsView({ onCreateProject }: ProjectsViewProps) {
           })}
 
           {/* Add project card */}
-          <button
-            onClick={onCreateProject}
-            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-8 text-center transition-colors hover:border-primary/30 hover:bg-accent/20"
-          >
-            <div className="flex size-10 items-center justify-center rounded-full bg-secondary">
-              <Plus className="size-5 text-muted-foreground" />
-            </div>
-            <span className="text-sm font-medium text-muted-foreground">Create New Project</span>
-          </button>
+          {isAnyProjectLead && (
+            <button
+              onClick={onCreateProject}
+              className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-8 text-center transition-colors hover:border-primary/30 hover:bg-accent/20"
+            >
+              <div className="flex size-10 items-center justify-center rounded-full bg-secondary">
+                <Plus className="size-5 text-muted-foreground" />
+              </div>
+              <span className="text-sm font-medium text-muted-foreground">Create New Project</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

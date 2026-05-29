@@ -21,6 +21,7 @@ public class SubtaskController {
     private final SubtaskService subtaskService;
 
     // Добавление нового пункта в чеклист конкретной задачи
+    @PreAuthorize("@securityService.canManageSubtasks(#taskId)")
     @PostMapping("/tasks/{taskId}/subtasks")
     public ResponseEntity<SubtaskResponse> create(@PathVariable Long taskId,
                                                   @Valid @RequestBody SubtaskRequest dto) {
@@ -28,21 +29,22 @@ public class SubtaskController {
     }
 
     // Переключение галочки (выполнено/не выполнено)
+    @PreAuthorize("@securityService.canToggleSubtask(#id)")
     @PatchMapping("/subtasks/{id}/toggle")
     public ResponseEntity<SubtaskResponse> toggle(@PathVariable Long id) {
         return ResponseEntity.ok(subtaskService.toggleStatus(id));
     }
 
     @PatchMapping("/subtasks/{id}")
-    @PreAuthorize("@securityService.canEditSubtask(#id)") // Если добавишь такой метод в SecurityService
-    public ResponseEntity<Void> updateSubtask(
+    @PreAuthorize("@securityService.canEditSubtask(#id)")
+    public ResponseEntity<SubtaskResponse> updateSubtask(
             @PathVariable Long id,
             @RequestBody UpdateSubtaskRequest dto) {
-        subtaskService.updateSubtask(id, dto);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(subtaskService.updateSubtask(id, dto));
     }
 
     // Удаление подзадачи
+    @PreAuthorize("@securityService.canDeleteSubtask(#id)")
     @DeleteMapping("/subtasks/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         subtaskService.deleteSubtask(id);

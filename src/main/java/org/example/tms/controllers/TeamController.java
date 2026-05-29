@@ -54,4 +54,14 @@ public class TeamController {
         teamService.addUserToTeam(teamId, request.getUserId(), request.getPosition());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
+
+    @PreAuthorize("@securityService.canManageTeam(#teamId)")
+    @DeleteMapping("/{teamId}/members/{userId}")
+    @Operation(summary = "Выгнать участника из команды", description = "Только тимлид может выгонять участников")
+    public ResponseEntity<Void> removeMember(
+            @PathVariable Long teamId,
+            @PathVariable Long userId) {
+        teamService.removeUserFromTeam(teamId, userId);
+        return ResponseEntity.noContent().build();
+    }
 }

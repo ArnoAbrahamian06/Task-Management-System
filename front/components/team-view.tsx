@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useToast } from "@/components/ui/use-toast"
 import {
   Users,
   Search,
@@ -20,6 +21,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog"
@@ -33,19 +35,93 @@ import { useTaskContext } from "@/lib/task-context"
 import { cn } from "@/lib/utils"
 
 const roleColors: Record<string, string> = {
+  "TEAM_LEAD": "bg-primary/15 text-primary",
   "Team Lead": "bg-primary/15 text-primary",
-  "Frontend Dev": "bg-info/15 text-info",
-  "Backend Dev": "bg-success/15 text-success",
+  "Tech Lead": "bg-primary/15 text-primary",
+  "Frontend Developer": "bg-info/15 text-info",
+  "Backend Developer": "bg-success/15 text-success",
+  "Fullstack Developer": "bg-success/15 text-success",
+  "Mobile Developer": "bg-info/15 text-info",
   "Designer": "bg-chart-3/15 text-chart-3",
   "QA Engineer": "bg-warning/15 text-warning",
-  "PM": "bg-destructive/15 text-destructive",
+  "DevOps Engineer": "bg-chart-2/15 text-chart-2",
+  "Data Scientist": "bg-chart-4/15 text-chart-4",
+  "System Analyst": "bg-chart-5/15 text-chart-5",
+  "Business Analyst": "bg-chart-5/15 text-chart-5",
+  "Project Manager": "bg-destructive/15 text-destructive",
+  "Product Manager": "bg-destructive/15 text-destructive",
+  "MEMBER": "bg-secondary text-muted-foreground",
 }
 
 export function TeamView() {
-  const { teamMembers, tasks } = useTaskContext()
+  const { toast } = useToast()
+  const { teamMembers, tasks, teams, user: currentUser, inviteUser, removeTeamMember } = useTaskContext()
   const [searchQuery, setSearchQuery] = useState("")
   const [filterRole, setFilterRole] = useState<string>("all")
   const [inviteOpen, setInviteOpen] = useState(false)
+
+  // State for the invite dialog
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteRole, setInviteRole] = useState("MEMBER")
+  const [selectedTeamId, setSelectedTeamId] = useState("")
+  const [inviteError, setInviteError] = useState("")
+  const [inviteSuccess, setInviteSuccess] = useState("")
+
+  const leadTeams = teams.filter((t) =>
+    t.members.some((m) => m.userId === currentUser?.id && m.role === "TEAM_LEAD")
+  )
+  const isTeamLead = leadTeams.length > 0
+
+  useEffect(() => {
+    if (leadTeams.length > 0 && !selectedTeamId) {
+      setSelectedTeamId(leadTeams[0].teamId)
+    }
+  }, [leadTeams, selectedTeamId])
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail) {
+      setInviteError("Email address is required")
+      return
+    }
+    if (!selectedTeamId) {
+      setInviteError("Please select a team")
+      return
+    }
+
+    try {
+      setInviteError("")
+      setInviteSuccess("")
+      await inviteUser(selectedTeamId, inviteEmail, inviteRole)
+      setInviteSuccess("Приглашение успешно отправлено!")
+      setInviteEmail("")
+      setTimeout(() => {
+        setInviteOpen(false)
+        setInviteSuccess("")
+      }, 1500)
+    } catch (err: any) {
+      console.error(err)
+      setInviteError(err.message || "Не удалось отправить приглашение")
+    }
+  }
+
+  const handleKick = async (teamId: string, userId: string, userName: string, teamName: string) => {
+    if (!confirm(`Вы действительно хотите выгнать ${userName} из команды ${teamName}?`)) {
+      return
+    }
+    try {
+      await removeTeamMember(teamId, userId)
+      toast({
+        title: "Успешно",
+        description: `Участник ${userName} был успешно исключен из команды ${teamName}`,
+      })
+    } catch (err: any) {
+      toast({
+        title: "Ошибка",
+        description: err.message || "Не удалось исключить участника",
+        variant: "destructive",
+      })
+    }
+  }
 
   const roles = [...new Set(teamMembers.map((u) => u.role))]
 
@@ -114,52 +190,89 @@ export function TeamView() {
           ))}
         </div>
 
-        <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="ml-auto gap-1.5 text-xs">
-              <UserPlus className="size-3.5" />
-              Invite Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Invite Team Member</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 py-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Email address</label>
-                <input
-                  type="email"
-                  placeholder="colleague@company.com"
-                  className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Role</label>
-                <select className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
-                  {roles.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Personal message (optional)</label>
-                <textarea
-                  placeholder="Hey! Join our TaskFlow workspace..."
-                  rows={3}
-                  className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
-              <Button onClick={() => setInviteOpen(false)} className="gap-1.5">
-                <Mail className="size-3.5" />
-                Send Invite
+        {isTeamLead && (
+          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="ml-auto gap-1.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
+                <UserPlus className="size-3.5" />
+                Invite Member
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Invite Team Member</DialogTitle>
+                <DialogDescription className="sr-only">Invite a new member to your team.</DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                {inviteError && (
+                  <div className="rounded-md bg-destructive/10 p-2.5 text-xs text-destructive border border-destructive/20">
+                    {inviteError}
+                  </div>
+                )}
+                {inviteSuccess && (
+                  <div className="rounded-md bg-success/10 p-2.5 text-xs text-success border border-success/20">
+                    {inviteSuccess}
+                  </div>
+                )}
+                {leadTeams.length > 1 && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Select Team</label>
+                    <select
+                      value={selectedTeamId}
+                      onChange={(e) => setSelectedTeamId(e.target.value)}
+                      className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      {leadTeams.map((t) => (
+                        <option key={t.teamId} value={t.teamId}>{t.teamName}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Email address</label>
+                  <input
+                    type="email"
+                    placeholder="colleague@company.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Role</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                    className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="MEMBER">Member (Generic)</option>
+                    <option value="Frontend Developer">Frontend Developer</option>
+                    <option value="Backend Developer">Backend Developer</option>
+                    <option value="Fullstack Developer">Fullstack Developer</option>
+                    <option value="Mobile Developer">Mobile Developer</option>
+                    <option value="Designer">Designer (UI/UX)</option>
+                    <option value="QA Engineer">QA Engineer</option>
+                    <option value="DevOps Engineer">DevOps Engineer</option>
+                    <option value="Data Scientist">Data Scientist</option>
+                    <option value="System Analyst">System Analyst</option>
+                    <option value="Business Analyst">Business Analyst</option>
+                    <option value="Project Manager">Project Manager (PM)</option>
+                    <option value="Product Manager">Product Manager</option>
+                    <option value="Tech Lead">Tech Lead</option>
+                    <option value="TEAM_LEAD">Team Lead</option>
+                  </select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+                <Button onClick={handleSendInvite} className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Mail className="size-3.5" />
+                  Send Invite
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Team grid */}
@@ -198,6 +311,34 @@ export function TeamView() {
                         <DropdownMenuItem>View Profile</DropdownMenuItem>
                         <DropdownMenuItem>Send Message</DropdownMenuItem>
                         <DropdownMenuItem>Assign Task</DropdownMenuItem>
+                        {(() => {
+                          const teamsWeCanKickFrom = teams.filter((t) => {
+                            const isCurrentUserLead = t.members.some(
+                              (m) => m.userId === currentUser?.id && m.role === "TEAM_LEAD"
+                            )
+                            const isTargetUserMember = t.members.some(
+                              (m) => m.userId === user.id
+                            )
+                            return isCurrentUserLead && isTargetUserMember && user.id !== currentUser?.id
+                          })
+
+                          if (teamsWeCanKickFrom.length === 0) return null
+
+                          return (
+                            <>
+                              <div className="h-px bg-border my-1" />
+                              {teamsWeCanKickFrom.map((t) => (
+                                <DropdownMenuItem
+                                  key={t.teamId}
+                                  className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer font-medium"
+                                  onClick={() => handleKick(t.teamId, user.id, user.name, t.teamName)}
+                                >
+                                  Выгнать из {t.teamName}
+                                </DropdownMenuItem>
+                              ))}
+                            </>
+                          )
+                        })()}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

@@ -31,13 +31,19 @@ public class TaskService {
         Project project = getProject(dto.getProjectId());
         User currentUser = getCurrentUser();
 
-        TeamMember creatorMember = getMembership(currentUser, project.getTeam());
-        if (!"TEAM_LEAD".equals(creatorMember.getPosition())) {
-            throw new AccessDeniedException("Only Team Lead can create tasks");
+        // Проверяем, что создатель в команде проекта
+        getMembership(currentUser, project.getTeam());
+
+        TeamMember assignee = null;
+        if (dto.getAssigneeId() != null) {
+            User assigneeUser = userRepository.findById(dto.getAssigneeId())
+                    .orElseThrow(() -> new EntityNotFoundException("Assignee user not found"));
+            assignee = getOrCreateMembership(assigneeUser, project.getTeam());
         }
 
-        // Логика маппинга и сохранения...
-        return null; // здесь ваша реализация сохранения
+        Task task = taskMapper.toEntity(dto, project, assignee);
+        task.setCreator(currentUser);
+        return taskMapper.toResponse(taskRepository.save(task));
     }
 
     @Transactional(readOnly = true)
@@ -48,6 +54,14 @@ public class TaskService {
     }
 
     // ИСПРАВЛЕНО: Теперь используем переданный userId напрямую в репозитории
+    @Transactional(readOnly = true)
+    public List<TaskResponse> getAllUserTasks(Long userId) {
+        return taskRepository.findAllByAssigneeId(userId)
+                .stream()
+                .map(taskMapper::toResponse)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public Long getMyInProgressTasksCount(Long userId) {
         return taskRepository.countByAssigneeIdAndStatus(userId, TaskStatus.IN_PROGRESS);
@@ -79,8 +93,7 @@ public class TaskService {
     public List<TaskResponse> getTop5PriorityTasks(Long userId) {
         List<Task> tasks = taskRepository.findTop5PriorityTasksByUserId(
                 userId,
-                PageRequest.of(0, 5)
-        );
+                PageRequest.of(0, 5));
 
         return tasks.stream()
                 .map(taskMapper::toResponse)
@@ -95,7 +108,15 @@ public class TaskService {
 
     public TaskResponse updateTask(Long id, UpdateTaskRequest dto) {
         Task task = getTask(id);
-        // логика обновления полей из dto
+        taskMapper.updateEntityFromDto(dto, task);
+
+        if (dto.getAssigneeId() != null) {
+            User assigneeUser = userRepository.findById(dto.getAssigneeId())
+                    .orElseThrow(() -> new EntityNotFoundException("Assignee user not found"));
+            TeamMember assignee = getOrCreateMembership(assigneeUser, task.getProject().getTeam());
+            task.setAssignee(assignee);
+        }
+
         return taskMapper.toResponse(taskRepository.save(task));
     }
 
@@ -110,14 +131,26 @@ public class TaskService {
                 .orElseThrow(() -> new AccessDeniedException("User is not a member of the project team"));
     }
 
+    private TeamMember getOrCreateMembership(User user, Team team) {
+        return teamMemberRepository.findByUserAndTeam(user, team)
+                .orElseGet(() -> {
+                    TeamMember member = new TeamMember();
+                    member.setUser(user);
+                    member.setTeam(team);
+                    member.setPosition("DEVELOPER");
+                    return teamMemberRepository.save(member);
+                });
+    }
+
     /**
-     * Оставляем этот метод только для операций, где нужна полная сущность User (например, создание/редактирование).
+     * Оставляем этот метод только для операций, где нужна полная сущность User
+     * (например, создание/редактирование).
      * Для простых фильтров и счетчиков лучше использовать userId из контроллера.
      */
     private User getCurrentUser() {
         return userRepository.findByEmail(
-                SecurityContextHolder.getContext().getAuthentication().getName()
-        ).orElseThrow(() -> new EntityNotFoundException("Current user not found"));
+                SecurityContextHolder.getContext().getAuthentication().getName())
+                .orElseThrow(() -> new EntityNotFoundException("Current user not found"));
     }
 
     private Project getProject(Long id) {

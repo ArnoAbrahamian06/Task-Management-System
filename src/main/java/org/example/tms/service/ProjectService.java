@@ -10,6 +10,7 @@ import org.example.tms.mapper.ProjectMapper;
 import org.example.tms.repository.ProjectRepository;
 import org.example.tms.repository.TeamRepository; // Добавлен
 import org.example.tms.repository.TeamMemberRepository; // Добавлен
+import org.example.tms.repository.TaskRepository;
 import org.example.tms.repository.UserRepository;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,6 +28,7 @@ public class ProjectService {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final UserRepository userRepository;
+    private final TaskRepository taskRepository;
     private final ProjectMapper projectMapper;
 
     public ProjectResponse createProject(CreateProjectRequest dto) {
@@ -129,9 +131,7 @@ public class ProjectService {
         // Используем ваш метод получения текущего юзера
         User currentUser = getCurrentUser();
 
-        Long totalTasks = projectRepository.countTotalTasksInMyProjects(currentUser);
-
-        return totalTasks != null ? totalTasks : 0L;
+        return taskRepository.countTotalVisibleTasks(currentUser.getId());
     }
 
     public ProjectResponse attachTeam(Long projectId, Long teamId) {

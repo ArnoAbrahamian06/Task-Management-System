@@ -42,6 +42,7 @@
 
 import {
   type Task,
+  type Subtask,
   type Project,
   type User,
   type Notification,
@@ -58,7 +59,7 @@ import {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
 const DEFAULT_TEAM_ID = Number(process.env.NEXT_PUBLIC_DEFAULT_TEAM_ID ?? 1)
 
-type ApiTaskStatus = "TODO" | "IN_PROGRESS" | "DONE"
+type ApiTaskStatus = "NEW" | "IN_PROGRESS" | "REVIEW" | "DONE" | "DEFERRED"
 type ApiTaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT"
 
 interface ApiTaskResponse {
@@ -122,6 +123,16 @@ function normalizeId(value: string | number): string {
   return String(value)
 }
 
+function formatToLocalDateTime(dateStr?: string) {
+  if (!dateStr) return undefined
+  if (dateStr.includes("T")) {
+    // Strip milliseconds and Z if present
+    return dateStr.split(".")[0].replace("Z", "")
+  }
+  // Handle YYYY-MM-DD
+  return `${dateStr}T00:00:00`
+}
+
 function toAvatar(name: string): string {
   if (!name) return "U"
   return name
@@ -134,17 +145,19 @@ function toAvatar(name: string): string {
 }
 
 const apiStatusToStatus: Record<ApiTaskStatus, Status> = {
-  TODO: "new",
+  NEW: "new",
   IN_PROGRESS: "in_progress",
+  REVIEW: "review",
   DONE: "done",
+  DEFERRED: "deferred",
 }
 
-const statusToApiStatus: Partial<Record<Status, ApiTaskStatus>> = {
-  new: "TODO",
+const statusToApiStatus: Record<Status, ApiTaskStatus> = {
+  new: "NEW",
   in_progress: "IN_PROGRESS",
+  review: "REVIEW",
   done: "DONE",
-  review: "TODO",
-  deferred: "TODO",
+  deferred: "DEFERRED",
 }
 
 const apiPriorityToPriority: Record<ApiTaskPriority, Priority> = {
@@ -190,11 +203,11 @@ async function fetchJson<T>(input: RequestInfo, init?: RequestInit, skipAuth = f
 
   try {
     response = await fetch(input, {
+      ...init,
       headers: {
         ...getHeaders(hasBody, skipAuth),
         ...(init?.headers ?? {}),
       },
-      ...init,
     })
   } catch (err) {
     throw new Error(
@@ -204,9 +217,18 @@ async function fetchJson<T>(input: RequestInfo, init?: RequestInit, skipAuth = f
 
   if (!response.ok) {
     const text = await response.text().catch(() => "")
-    throw new Error(
-      `Request failed (${response.status} ${response.statusText})${text ? `: ${text}` : ""}`
-    )
+    let errorMessage = `Request failed (${response.status} ${response.statusText})${text ? `: ${text}` : ""}`
+    try {
+      if (text) {
+        const parsed = JSON.parse(text)
+        if (parsed && typeof parsed.message === "string") {
+          errorMessage = parsed.message
+        }
+      }
+    } catch (e) {
+      // Ignore JSON parse errors
+    }
+    throw new Error(errorMessage)
   }
 
   // Check if response has content
@@ -233,11 +255,11 @@ async function fetchToken(input: RequestInfo, init?: RequestInit, skipAuth = fal
 
   try {
     response = await fetch(input, {
+      ...init,
       headers: {
         ...getHeaders(hasBody, skipAuth),
         ...(init?.headers ?? {}),
       },
-      ...init,
     })
   } catch (err) {
     throw new Error(
@@ -248,9 +270,18 @@ async function fetchToken(input: RequestInfo, init?: RequestInit, skipAuth = fal
   const text = await response.text().catch(() => "")
 
   if (!response.ok) {
-    throw new Error(
-      `Request failed (${response.status} ${response.statusText})${text ? `: ${text}` : ""}`
-    )
+    let errorMessage = `Request failed (${response.status} ${response.statusText})${text ? `: ${text}` : ""}`
+    try {
+      if (text) {
+        const parsed = JSON.parse(text)
+        if (parsed && typeof parsed.message === "string") {
+          errorMessage = parsed.message
+        }
+      }
+    } catch (e) {
+      // Ignore JSON parse errors
+    }
+    throw new Error(errorMessage)
   }
 
   try {
@@ -342,14 +373,30 @@ function mapApiTask(task: ApiTaskResponse): Task {
   return mapped
 }
 
-function mapApiProject(project: ApiProjectResponse, color = "#64748b"): Project {
+function getProjectColor(projectId: string, defaultColor = "#4f8ff7"): string {
+  if (typeof window === "undefined") return defaultColor
+  const saved = localStorage.getItem(`project_color_${projectId}`)
+  if (saved) return saved
+  localStorage.setItem(`project_color_${projectId}`, defaultColor)
+  return defaultColor
+}
+
+function saveProjectColor(projectId: string, color: string) {
+  if (typeof window === "undefined") return
+  localStorage.setItem(`project_color_${projectId}`, color)
+}
+
+function mapApiProject(project: ApiProjectResponse, color?: string): Project {
+  const id = normalizeId(project.id)
+  const resolvedColor = color ? (saveProjectColor(id, color), color) : getProjectColor(id)
   return {
-    id: normalizeId(project.id),
+    id,
     name: project.name,
-    color,
+    color: resolvedColor,
     description: project.description ?? "",
     tasksCount: project.tasksCount ?? 0,
     completedCount: project.completedCount ?? 0,
+    teamId: project.teamId ? normalizeId(project.teamId) : undefined,
   }
 }
 
@@ -365,10 +412,25 @@ function mapApiUser(user: ApiUserResponse): User {
 }
 
 // ---- Internal mutable state (simulates database) ----
-let _tasks = [...mockTasks]
-let _projects = [...mockProjects]
-let _notifications = [...mockNotifications]
-let _settings = { ...mockSettings }
+let _tasks: Task[] = []
+let _projects: Project[] = []
+let _notifications: Notification[] = []
+let _settings = {
+  profile: { name: "", email: "", avatar: "", role: "" },
+  notifications: {
+    emailTaskAssigned: true,
+    emailComments: true,
+    emailDeadlines: true,
+    pushTaskAssigned: true,
+    pushComments: false,
+    pushDeadlines: true,
+    inAppTaskAssigned: true,
+    inAppComments: true,
+    inAppDeadlines: true,
+  },
+  appearance: { language: "en", theme: "dark", showCompletedTasks: true, sidebarStyle: "dark" as const },
+  workspace: { name: "Team Workspace", defaultProjectId: "" },
+}
 let _nextId = 100
 
 function genId(prefix: string) {
@@ -380,10 +442,28 @@ function genId(prefix: string) {
 // TASKS
 // ==========================
 
+function syncTasks(data: Task | Task[]) {
+  const newTasks = Array.isArray(data) ? data : [data]
+  newTasks.forEach((newTask) => {
+    const idx = _tasks.findIndex((t) => t.id === newTask.id)
+    if (idx !== -1) {
+      _tasks[idx] = { ..._tasks[idx], ...newTask }
+    } else {
+      _tasks.push(newTask)
+    }
+  })
+}
+
 export async function getTasks(): Promise<Task[]> {
-  // OpenAPI does not expose a task list endpoint, so we keep local state for tasks
-  // that are created and updated during the session.
-  return _tasks
+  try {
+    const data = await fetchJson<ApiTaskResponse[]>(`${API_BASE_URL}/api/tasks/my`)
+    const mapped = data.map(mapApiTask)
+    syncTasks(mapped)
+    return mapped
+  } catch (err) {
+    console.warn("Failed to load tasks from API.", err)
+    return _tasks
+  }
 }
 
 export async function getTopPriorityTasks(): Promise<Task[]> {
@@ -391,7 +471,9 @@ export async function getTopPriorityTasks(): Promise<Task[]> {
     const data = await fetchJson<ApiTaskResponse[]>(
       `${API_BASE_URL}/api/tasks/my/top-priority`
     )
-    return data.map(mapApiTask)
+    const mapped = data.map(mapApiTask)
+    syncTasks(mapped)
+    return mapped
   } catch (err) {
     console.warn("Failed to load top priority tasks from API.", err)
     return _tasks
@@ -402,7 +484,18 @@ export async function getTopPriorityTasks(): Promise<Task[]> {
 }
 
 export async function getTaskById(id: string): Promise<Task | undefined> {
-  return _tasks.find((t) => t.id === id)
+  const local = _tasks.find((t) => t.id === id)
+  if (local) return local
+
+  try {
+    const result = await fetchJson<ApiTaskResponse>(`${API_BASE_URL}/api/tasks/${id}`)
+    const task = mapApiTask(result)
+    syncTasks(task)
+    return task
+  } catch (err) {
+    console.warn(`Failed to fetch task ${id} from API`, err)
+    return undefined
+  }
 }
 
 export interface CreateTaskInput {
@@ -423,63 +516,27 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     title: input.title,
     description: input.description,
     priority: priorityToApiPriority[input.priority ?? "medium"],
-    projectId: Number(input.projectId ?? 0),
-    deadline: input.deadline ? new Date(input.deadline).toISOString() : undefined,
+    projectId: Number(input.projectId),
+    deadline: formatToLocalDateTime(input.deadline),
     assigneeId: input.assigneeId ? Number(input.assigneeId) : undefined,
+  }
+
+  if (!payload.projectId) {
+    throw new Error("Project ID is required to create a task")
   }
 
   console.log("Creating task with payload:", payload)
 
-  try {
-    const result = await fetchJson<ApiTaskResponse>(`${API_BASE_URL}/api/tasks`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    })
+  const result = await fetchJson<ApiTaskResponse>(`${API_BASE_URL}/api/tasks`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
 
-    // Check if we got a valid response with task data
-    if (!result || !result.id) {
-      console.warn("API returned empty or invalid response, using local fallback")
-      throw new Error("Invalid API response")
-    }
-
-    const task = mapApiTask(result)
-    task.tags = input.tags ?? []
-    task.timeEstimate = input.timeEstimate ?? 0
-    _tasks = [task, ..._tasks]
-    return task
-  } catch (err) {
-    console.warn("Failed to create task through API, using local fallback.", err)
-
-    const now = new Date().toISOString()
-    const task: Task = {
-      id: genId("t"),
-      title: input.title,
-      description: input.description || "",
-      status: input.status || "new",
-      priority: input.priority || "medium",
-      assigneeId: input.assigneeId || "u1",
-      creatorId: input.creatorId || "u1",
-      projectId: input.projectId || "p1",
-      tags: input.tags || [],
-      deadline:
-        input.deadline ||
-        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-      createdAt: now,
-      updatedAt: now,
-      comments: [],
-      subtasks: [],
-      timeEstimate: input.timeEstimate || 0,
-      timeSpent: 0,
-    }
-    _tasks = [task, ..._tasks]
-
-    const proj = _projects.find((p) => p.id === task.projectId)
-    if (proj) {
-      proj.tasksCount++
-    }
-
-    return task
+  if (!result || !result.id) {
+    throw new Error("Invalid API response during task creation")
   }
+
+  return mapApiTask(result)
 }
 
 export async function updateTask(id: string, updates: Partial<Task>): Promise<Task> {
@@ -489,7 +546,7 @@ export async function updateTask(id: string, updates: Partial<Task>): Promise<Ta
   if (updates.description !== undefined) payload.description = updates.description
   if (updates.status !== undefined) payload.status = statusToApiStatus[updates.status]
   if (updates.priority !== undefined) payload.priority = priorityToApiPriority[updates.priority]
-  if (updates.deadline !== undefined) payload.deadline = updates.deadline
+  if (updates.deadline !== undefined) payload.deadline = formatToLocalDateTime(updates.deadline)
   if (updates.assigneeId !== undefined) payload.assigneeId = Number(updates.assigneeId)
 
   try {
@@ -527,7 +584,7 @@ export async function updateTask(id: string, updates: Partial<Task>): Promise<Ta
 
 export async function deleteTask(id: string): Promise<void> {
   try {
-    await fetch(`${API_BASE_URL}/api/tasks/${id}`, { method: "DELETE" })
+    await fetchJson(`${API_BASE_URL}/api/tasks/${id}`, { method: "DELETE" })
     _tasks = _tasks.filter((t) => t.id !== id)
   } catch (err) {
     console.warn("Failed to delete task through API, using local fallback.", err)
@@ -556,35 +613,52 @@ export async function addComment(taskId: string, userId: string, text: string): 
   return _tasks[idx]
 }
 
-export async function toggleSubtask(taskId: string, subtaskId: string): Promise<Task> {
-  try {
-    const result = await fetchJson<ApiSubtaskResponse>(
-      `${API_BASE_URL}/api/subtasks/${subtaskId}/toggle`,
-      { method: "PATCH" }
-    )
-    const idx = _tasks.findIndex((t) => t.id === taskId)
-    if (idx === -1) throw new Error(`Task ${taskId} not found`)
-    _tasks[idx] = {
-      ..._tasks[idx],
-      subtasks: _tasks[idx].subtasks.map((s) =>
-        s.id === subtaskId ? { ...s, done: result.completed } : s
-      ),
-      updatedAt: new Date().toISOString(),
-    }
-    return _tasks[idx]
-  } catch (err) {
-    console.warn("Failed to toggle subtask through API, using local fallback.", err)
-    const idx = _tasks.findIndex((t) => t.id === taskId)
-    if (idx === -1) throw new Error(`Task ${taskId} not found`)
-    _tasks[idx] = {
-      ..._tasks[idx],
-      subtasks: _tasks[idx].subtasks.map((s) =>
-        s.id === subtaskId ? { ...s, done: !s.done } : s
-      ),
-      updatedAt: new Date().toISOString(),
-    }
-    return _tasks[idx]
+export async function toggleSubtask(taskId: string, subtaskId: string): Promise<Subtask> {
+  const result = await fetchJson<ApiSubtaskResponse>(
+    `${API_BASE_URL}/api/subtasks/${subtaskId}/toggle`,
+    { method: "PATCH" }
+  )
+  return {
+    id: normalizeId(result.id),
+    title: result.title ?? "",
+    done: result.completed,
   }
+}
+
+export async function addSubtask(taskId: string, title: string): Promise<Subtask> {
+  const result = await fetchJson<ApiSubtaskResponse>(
+    `${API_BASE_URL}/api/tasks/${taskId}/subtasks`,
+    {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }
+  )
+  return {
+    id: normalizeId(result.id),
+    title: result.title ?? "",
+    done: result.completed,
+  }
+}
+
+export async function updateSubtask(subtaskId: string, updates: { title?: string; completed?: boolean }): Promise<Subtask> {
+  const result = await fetchJson<ApiSubtaskResponse>(
+    `${API_BASE_URL}/api/subtasks/${subtaskId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    }
+  )
+  return {
+    id: normalizeId(result.id),
+    title: result.title ?? "",
+    done: result.completed,
+  }
+}
+
+export async function deleteSubtask(subtaskId: string): Promise<void> {
+  await fetchJson(`${API_BASE_URL}/api/subtasks/${subtaskId}`, {
+    method: "DELETE",
+  })
 }
 
 // ==========================
@@ -650,7 +724,7 @@ export async function updateProject(id: string, updates: Partial<Project>): Prom
       method: "PATCH",
       body: JSON.stringify(payload),
     })
-    const updated = mapApiProject(result)
+    const updated = mapApiProject(result, updates.color)
     _projects = _projects.map((p) => (p.id === id ? updated : p))
     return updated
   } catch (err) {
@@ -664,7 +738,7 @@ export async function updateProject(id: string, updates: Partial<Project>): Prom
 
 export async function deleteProject(id: string): Promise<void> {
   try {
-    await fetch(`${API_BASE_URL}/api/projects/${id}`, { method: "DELETE" })
+    await fetchJson(`${API_BASE_URL}/api/projects/${id}`, { method: "DELETE" })
     _projects = _projects.filter((p) => p.id !== id)
   } catch (err) {
     console.warn("Failed to delete project through API, using local fallback.", err)
@@ -707,6 +781,36 @@ export async function getMyTeamMembers(): Promise<User[]> {
   }
 }
 
+export interface TeamWithMembers {
+  teamId: string
+  teamName: string
+  members: {
+    userId: string
+    userName: string
+    role: string
+    email: string
+  }[]
+}
+
+export async function getMyTeamsWithMembers(): Promise<TeamWithMembers[]> {
+  try {
+    const data = await fetchJson<ApiTeamWithMembersResponse[]>(`${API_BASE_URL}/api/teams/my-with-members`)
+    return data.map((team) => ({
+      teamId: normalizeId(team.teamId),
+      teamName: team.teamName,
+      members: team.members.map((m) => ({
+        userId: normalizeId(m.userId),
+        userName: m.userName || m.email || "Unknown User",
+        role: m.position || "User",
+        email: m.email || "",
+      })),
+    }))
+  } catch (err) {
+    console.warn("Failed to load teams from API.", err)
+    return []
+  }
+}
+
 export async function getUsers(): Promise<User[]> {
   try {
     const data = await fetchJson<ApiUserResponse[]>(`${API_BASE_URL}/api/admin/users`)
@@ -719,31 +823,131 @@ export async function getUsers(): Promise<User[]> {
   }
 }
 
+export interface CreateUserInput {
+  name: string
+  email: string
+  role: "USER" | "ADMIN"
+  password?: string
+}
+
+export async function adminCreateUser(input: CreateUserInput): Promise<User> {
+  const result = await fetchJson<ApiUserResponse>(`${API_BASE_URL}/api/admin/users`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+  return mapApiUser(result)
+}
+
+export async function adminChangeUserRole(id: string, role: "USER" | "ADMIN"): Promise<User> {
+  const result = await fetchJson<ApiUserResponse>(
+    `${API_BASE_URL}/api/admin/users/${id}/role?role=${role}`,
+    {
+      method: "PUT",
+    }
+  )
+  return mapApiUser(result)
+}
+
+export async function adminDeleteUser(id: string): Promise<void> {
+  await fetchJson(`${API_BASE_URL}/api/admin/users/${id}`, {
+    method: "DELETE",
+  })
+}
+
+export async function adminGetProjects(): Promise<Project[]> {
+  try {
+    const data = await fetchJson<ApiProjectResponse[]>(`${API_BASE_URL}/api/admin/projects`)
+    return data.map((p) => mapApiProject(p))
+  } catch (err) {
+    console.warn("Failed to load admin projects", err)
+    return []
+  }
+}
+
+export async function adminDeleteProject(id: string): Promise<void> {
+  await fetchJson(`${API_BASE_URL}/api/admin/projects/${id}`, {
+    method: "DELETE",
+  })
+}
+
+export async function adminGetTasks(): Promise<Task[]> {
+  try {
+    const data = await fetchJson<ApiTaskResponse[]>(`${API_BASE_URL}/api/admin/tasks`)
+    return data.map(mapApiTask)
+  } catch (err) {
+    console.warn("Failed to load admin tasks from API", err)
+    return []
+  }
+}
+
+export async function adminDeleteTask(id: string): Promise<void> {
+  await fetchJson(`${API_BASE_URL}/api/admin/tasks/${id}`, {
+    method: "DELETE",
+  })
+}
+
+export async function adminGetTeams(): Promise<TeamWithMembers[]> {
+  try {
+    const data = await fetchJson<ApiTeamWithMembersResponse[]>(`${API_BASE_URL}/api/admin/teams`)
+    return data.map((team) => ({
+      teamId: normalizeId(team.teamId),
+      teamName: team.teamName,
+      members: team.members.map((m) => ({
+        userId: normalizeId(m.userId),
+        userName: m.userName || m.email || "Unknown User",
+        role: m.position || "User",
+        email: m.email || "",
+      })),
+    }))
+  } catch (err) {
+    console.warn("Failed to load admin teams", err)
+    return []
+  }
+}
+
+
 // ==========================
 // NOTIFICATIONS
 // ==========================
 
+function mapApiNotification(n: any): Notification {
+  return {
+    id: normalizeId(n.id),
+    type: (n.type || "mention").toLowerCase() as any,
+    title: n.title,
+    description: n.description,
+    read: n.read,
+    createdAt: n.createdAt,
+  }
+}
+
 export async function getNotifications(): Promise<Notification[]> {
-  await delay(100)
-  return []
+  try {
+    const data = await fetchJson<any[]>(`${API_BASE_URL}/api/notifications`)
+    return data.map(mapApiNotification)
+  } catch (err) {
+    console.warn("Failed to load notifications from API.", err)
+    return []
+  }
 }
 
 export async function markNotificationRead(id: string): Promise<Notification> {
-  await delay(50)
-  const idx = _notifications.findIndex((n) => n.id === id)
-  if (idx === -1) throw new Error(`Notification ${id} not found`)
-  _notifications[idx] = { ..._notifications[idx], read: true }
-  return _notifications[idx]
+  const data = await fetchJson<any>(`${API_BASE_URL}/api/notifications/${id}/read`, {
+    method: "PATCH",
+  })
+  return mapApiNotification(data)
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
-  await delay(100)
-  _notifications = _notifications.map((n) => ({ ...n, read: true }))
+  await fetchJson(`${API_BASE_URL}/api/notifications/read-all`, {
+    method: "POST",
+  })
 }
 
 export async function clearAllNotifications(): Promise<void> {
-  await delay(100)
-  _notifications = []
+  await fetchJson(`${API_BASE_URL}/api/notifications`, {
+    method: "DELETE",
+  })
 }
 
 // ==========================
@@ -791,8 +995,20 @@ export async function getOverdueTasksCount(): Promise<number> {
 // ==========================
 
 export async function getSettings(): Promise<AppSettings | null> {
-  await delay(100)
-  return null
+  if (!_settings.profile.name) {
+    try {
+      const user = await getCurrentUser()
+      _settings.profile = {
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role,
+      }
+    } catch (err) {
+      console.warn("Failed to fetch current user to populate settings profile.", err)
+    }
+  }
+  return { ..._settings }
 }
 
 export async function updateSettings(updates: Partial<AppSettings>): Promise<AppSettings> {
@@ -800,3 +1016,107 @@ export async function updateSettings(updates: Partial<AppSettings>): Promise<App
   _settings = { ..._settings, ...updates }
   return { ..._settings }
 }
+
+// ==========================
+// INVITATIONS
+// ==========================
+
+export interface Invitation {
+  id: string
+  teamId: string
+  teamName: string
+  inviterId: string
+  inviterName: string
+  position: string
+  status: string
+  createdAt: string
+}
+
+function mapApiInvitation(apiInv: any): Invitation {
+  return {
+    id: normalizeId(apiInv.id),
+    teamId: normalizeId(apiInv.teamId),
+    teamName: apiInv.teamName,
+    inviterId: normalizeId(apiInv.inviterId),
+    inviterName: apiInv.inviterName,
+    position: apiInv.position || "MEMBER",
+    status: apiInv.status || "PENDING",
+    createdAt: apiInv.createdAt,
+  }
+}
+
+export async function inviteUser(teamId: string, email: string, position: string): Promise<Invitation> {
+  const data = await fetchJson<any>(`${API_BASE_URL}/api/teams/${teamId}/invitations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, position }),
+  })
+  return mapApiInvitation(data)
+}
+
+export async function getMyPendingInvitations(): Promise<Invitation[]> {
+  try {
+    const data = await fetchJson<any[]>(`${API_BASE_URL}/api/invitations/my/pending`)
+    return data.map(mapApiInvitation)
+  } catch (err) {
+    console.warn("Failed to fetch pending invitations.", err)
+    return []
+  }
+}
+
+export async function getTeamPendingInvitations(teamId: string): Promise<Invitation[]> {
+  try {
+    const data = await fetchJson<any[]>(`${API_BASE_URL}/api/teams/${teamId}/invitations/pending`)
+    return data.map(mapApiInvitation)
+  } catch (err) {
+    console.warn("Failed to fetch team pending invitations.", err)
+    return []
+  }
+}
+
+export async function acceptInvitation(id: string): Promise<void> {
+  await fetchJson(`${API_BASE_URL}/api/invitations/${id}/accept`, { method: "POST" })
+}
+
+export async function declineInvitation(id: string): Promise<void> {
+  await fetchJson(`${API_BASE_URL}/api/invitations/${id}/decline`, { method: "POST" })
+}
+
+export async function removeTeamMember(teamId: string, userId: string): Promise<void> {
+  await fetchJson(`${API_BASE_URL}/api/teams/${teamId}/members/${userId}`, {
+    method: "DELETE",
+  })
+}
+
+export interface SystemMetrics {
+  cpuUsage: number
+  memoryUsage: number
+  activeDbConnections: number
+  maxDbConnections: number
+  uptime: number
+}
+
+export async function getSystemMetrics(): Promise<SystemMetrics> {
+  return await fetchJson<SystemMetrics>(`${API_BASE_URL}/api/admin/system/metrics`)
+}
+
+export interface SendNotificationRequest {
+  userId?: string | number | null
+  title: string
+  description: string
+  type?: string
+}
+
+export async function sendAdminNotification(request: SendNotificationRequest): Promise<any> {
+  return await fetchJson<any>(`${API_BASE_URL}/api/notifications/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId: request.userId ? Number(request.userId) : null,
+      title: request.title,
+      description: request.description,
+      type: request.type || "INFO",
+    }),
+  })
+}
+

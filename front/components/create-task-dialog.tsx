@@ -19,14 +19,16 @@ interface CreateTaskDialogProps {
 }
 
 export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) {
-  const { addTask, projects, teamMembers } = useTaskContext()
+  const { addTask, projects, teamMembers, isTeamLeadOfProject } = useTaskContext()
   const [loading, setLoading] = useState(false)
+
+  const leadProjects = projects.filter((p) => isTeamLeadOfProject(p.id))
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [status, setStatus] = useState<Status>("new")
   const [priority, setPriority] = useState<Priority>("medium")
-  const [projectId, setProjectId] = useState(projects[0]?.id || "")
+  const [projectId, setProjectId] = useState(leadProjects[0]?.id || "")
   const [assigneeId, setAssigneeId] = useState(teamMembers[0]?.id || "")
   const [deadline, setDeadline] = useState("")
 
@@ -35,7 +37,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     setDescription("")
     setStatus("new")
     setPriority("medium")
-    setProjectId(projects[0]?.id || "")
+    setProjectId(leadProjects[0]?.id || "")
     setAssigneeId(teamMembers[0]?.id || "")
     setDeadline("")
   }
@@ -132,7 +134,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                 onChange={(e) => setProjectId(e.target.value)}
                 className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                {projects.map((p) => (
+                {leadProjects.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>

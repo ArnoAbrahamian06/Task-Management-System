@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Geist_Mono } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const inter = Inter({ subsets: ["latin", "cyrillic"], variable: "--font-inter" });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const inter = Inter({ 
+  subsets: ["latin", "cyrillic"], 
+  variable: "--font-inter",
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'TaskFlow - Task Management System',
@@ -33,15 +36,25 @@ export const viewport: Viewport = {
   themeColor: '#1a1b2e',
 }
 
+import { ThemeProvider } from '@/components/theme-provider'
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ru">
+    <html lang="ru" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+          themes={["light", "dark", "midnight", "sunset", "forest", "nord", "cyberpunk"]}
+        >
+          {children}
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>

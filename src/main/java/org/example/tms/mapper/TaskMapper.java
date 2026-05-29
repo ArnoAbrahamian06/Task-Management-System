@@ -9,7 +9,7 @@ import org.mapstruct.*;
 @Mapper(
         componentModel = "spring",
         // Убедитесь, что UserMapper умеет превращать User в UserShortDto
-        uses = {ProjectMapper.class, UserMapper.class},
+        uses = {ProjectMapper.class, UserMapper.class, SubtaskMapper.class},
         nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE
 )
 public interface TaskMapper {
@@ -18,6 +18,7 @@ public interface TaskMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "subtasks", ignore = true)
+    @Mapping(target = "creator", ignore = true)
     @Mapping(target = "status", constant = "NEW")
     @Mapping(target = "project", source = "project")
     @Mapping(target = "assignee", source = "assignee")
@@ -32,9 +33,11 @@ public interface TaskMapper {
     @Mapping(target = "subtasks", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "creator", ignore = true)
     void updateEntityFromDto(UpdateTaskRequest dto, @MappingTarget Task task);
 
     @Mapping(target = "project", source = "task.project")
     @Mapping(target = "assignee", source = "task.assignee.user")
+    @Mapping(target = "creator", source = "task.creator")
     TaskResponse toResponse(Task task);
 }

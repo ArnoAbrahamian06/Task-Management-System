@@ -31,6 +31,10 @@ const typeConfig: Record<NotificationType, { icon: typeof Bell; color: string; b
   deadline_approaching: { icon: Clock, color: "text-warning", bg: "bg-warning/10" },
   status_changed: { icon: ArrowRightLeft, color: "text-success", bg: "bg-success/10" },
   mention: { icon: AtSign, color: "text-chart-3", bg: "bg-chart-3/10" },
+  info: { icon: Bell, color: "text-info", bg: "bg-info/10" },
+  success: { icon: CheckCheck, color: "text-success", bg: "bg-success/10" },
+  warning: { icon: Clock, color: "text-warning", bg: "bg-warning/10" },
+  error: { icon: Trash2, color: "text-destructive", bg: "bg-destructive/10" },
 }
 
 const typeLabels: Record<NotificationType, string> = {
@@ -39,6 +43,10 @@ const typeLabels: Record<NotificationType, string> = {
   deadline_approaching: "Deadlines",
   status_changed: "Status",
   mention: "Mentions",
+  info: "Info",
+  success: "Success",
+  warning: "Warning",
+  error: "Error",
 }
 
 export function NotificationsView() {
@@ -48,6 +56,9 @@ export function NotificationsView() {
     markAllNotificationsRead,
     clearAllNotifications,
     unreadNotificationsCount,
+    pendingInvitations,
+    acceptInvitation,
+    declineInvitation,
   } = useTaskContext()
   const [filterType, setFilterType] = useState<NotificationType | "all">("all")
 
@@ -133,6 +144,46 @@ export function NotificationsView() {
 
       {/* Notification list */}
       <div className="flex-1 overflow-auto">
+        {pendingInvitations.length > 0 && (
+          <div className="border-b border-border bg-primary/[0.02] p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <UserPlus className="size-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">Приглашения в команды ({pendingInvitations.length})</h3>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {pendingInvitations.map((inv) => (
+                <div key={inv.id} className="rounded-lg border border-border/80 bg-card p-3 shadow-sm hover:border-primary/20 transition-all flex flex-col justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-primary">{inv.position}</p>
+                    <p className="text-sm font-medium text-foreground mt-0.5">
+                      Тимлид <span className="font-semibold">{inv.inviterName}</span> приглашает вас в команду <span className="font-semibold">{inv.teamName}</span> в качестве <span className="font-semibold">{inv.position === "TEAM_LEAD" ? "Team Lead" : inv.position === "MEMBER" ? "Участника" : inv.position}</span>.
+                    </p>
+                    <span className="text-[10px] text-muted-foreground mt-1 block">
+                      Отправлено {new Date(inv.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-success hover:bg-success/90 text-success-foreground text-xs py-1 h-8"
+                      onClick={() => acceptInvitation(inv.id)}
+                    >
+                      Принять
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-destructive hover:bg-destructive/10 border-destructive/20 text-xs py-1 h-8"
+                      onClick={() => declineInvitation(inv.id)}
+                    >
+                      Отклонить
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {groups.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="flex size-14 items-center justify-center rounded-2xl bg-secondary mb-3">
@@ -151,7 +202,11 @@ export function NotificationsView() {
               </span>
             </div>
             {group.items.map((notif) => {
-              const config = typeConfig[notif.type]
+              const config = typeConfig[notif.type] || {
+                icon: Bell,
+                color: "text-muted-foreground",
+                bg: "bg-muted/10",
+              }
               const Icon = config.icon
               return (
                 <button
@@ -177,7 +232,7 @@ export function NotificationsView() {
                         <span className="size-2 shrink-0 rounded-full bg-primary" />
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                    <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line">
                       {notif.description}
                     </p>
                     <span className="text-[10px] text-muted-foreground mt-1 block">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { TaskProvider, useTaskContext } from "@/lib/task-context"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -16,6 +16,9 @@ import { ProjectsView } from "@/components/projects-view"
 import { CreateTaskDialog } from "@/components/create-task-dialog"
 import { CreateProjectDialog } from "@/components/create-project-dialog"
 import { AuthView } from "@/components/auth-view"
+import { AdminView } from "@/components/admin-view"
+import { AdminAnalyticsView } from "@/components/admin-analytics-view"
+import { AdminLogsView } from "@/components/admin-logs-view"
 import type { Task } from "@/lib/data"
 
 const viewTitles: Record<string, { title: string; subtitle: string }> = {
@@ -26,6 +29,11 @@ const viewTitles: Record<string, { title: string; subtitle: string }> = {
   team: { title: "Team", subtitle: "Your team members" },
   notifications: { title: "Notifications", subtitle: "Stay up to date" },
   settings: { title: "Settings", subtitle: "Configure your workspace" },
+  admin_analytics: { title: "System Analytics", subtitle: "Core metrics and live system performance" },
+  admin_users: { title: "Users Directory", subtitle: "Administer user directory and permissions" },
+  admin_projects: { title: "Projects Registry", subtitle: "Global view and control of projects" },
+  admin_tasks: { title: "Global Tasks Registry", subtitle: "Monitor and manage all workspace tasks" },
+  admin_logs: { title: "System Audit Logs", subtitle: "Real-time audit log of system events" },
 }
 
 export default function Page() {
@@ -37,11 +45,19 @@ export default function Page() {
 }
 
 function AppContent() {
-  const { tasks, loading, user, authenticated, authLoading, login, register, logout } = useTaskContext()
+  const { tasks, projects, isTeamLeadOfProject, loading, user, authenticated, authLoading, login, register, logout } = useTaskContext()
   const [activeView, setActiveView] = useState("dashboard")
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [createTaskOpen, setCreateTaskOpen] = useState(false)
   const [createProjectOpen, setCreateProjectOpen] = useState(false)
+
+  // Redirect admin to Admin Panel by default (Overview & Analytics)
+  useEffect(() => {
+    const adminViews = ["admin_analytics", "admin_users", "admin_projects", "admin_tasks", "admin_logs", "settings", "notifications"]
+    if (user?.role?.toUpperCase() === "ADMIN" && !adminViews.includes(activeView)) {
+      setActiveView("admin_analytics")
+    }
+  }, [user, activeView])
 
   const headerInfo = viewTitles[activeView] || { title: "TaskFlow", subtitle: "" }
 
@@ -62,7 +78,7 @@ function AppContent() {
 
   // Keep selected task in sync with context
   const currentSelectedTask = selectedTask
-    ? tasks.find((t) => t.id === selectedTask.id) || selectedTask
+    ? tasks.find((t) => t.id === selectedTask.id) || null
     : null
 
   if (loading) {
@@ -89,7 +105,7 @@ function AppContent() {
             <TopHeader
               title={headerInfo.title}
               subtitle={headerInfo.subtitle}
-              onCreateTask={() => setCreateTaskOpen(true)}
+              onCreateTask={projects.some(p => isTeamLeadOfProject(p.id)) ? () => setCreateTaskOpen(true) : undefined}
               onNotificationsClick={() => setActiveView("notifications")}
               currentUser={user ?? undefined}
               onLogout={logout}
@@ -97,15 +113,15 @@ function AppContent() {
 
             <div className="flex flex-1 overflow-hidden">
               {/* Main Content */}
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-auto scrollbar-hide">
                 {activeView === "dashboard" && (
                   <DashboardView onTaskClick={setSelectedTask} />
                 )}
                 {activeView === "kanban" && (
-                  <KanbanBoard onTaskClick={setSelectedTask} />
+                  <KanbanBoard onTaskClick={setSelectedTask} tasks={tasks} />
                 )}
                 {activeView === "list" && (
-                  <TaskListView onTaskClick={setSelectedTask} />
+                  <TaskListView onTaskClick={setSelectedTask} tasks={tasks} />
                 )}
                 {activeView === "projects" && (
                   <ProjectsView onCreateProject={() => setCreateProjectOpen(true)} />
@@ -113,6 +129,12 @@ function AppContent() {
                 {activeView === "team" && <TeamView />}
                 {activeView === "notifications" && <NotificationsView />}
                 {activeView === "settings" && <SettingsView />}
+                {activeView === "admin" && <AdminView />}
+                {activeView === "admin_analytics" && <AdminAnalyticsView />}
+                {activeView === "admin_users" && <AdminView initialTab="users" />}
+                {activeView === "admin_projects" && <AdminView initialTab="projects" />}
+                {activeView === "admin_tasks" && <AdminView initialTab="tasks" />}
+                {activeView === "admin_logs" && <AdminLogsView />}
               </div>
 
               {/* Task Detail Panel */}

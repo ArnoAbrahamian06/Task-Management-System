@@ -1,6 +1,6 @@
 export type Priority = "urgent" | "high" | "medium" | "low"
 export type Status = "new" | "in_progress" | "review" | "done" | "deferred"
-export type NotificationType = "task_assigned" | "comment_added" | "deadline_approaching" | "status_changed" | "mention"
+export type NotificationType = "task_assigned" | "comment_added" | "deadline_approaching" | "status_changed" | "mention" | "info" | "success" | "warning" | "error"
 
 export interface User {
   id: string
@@ -50,6 +50,7 @@ export interface Project {
   description?: string
   tasksCount: number
   completedCount: number
+  teamId?: string
 }
 
 export interface Notification {
@@ -76,7 +77,7 @@ export interface AppSettings {
     inAppComments: boolean
     inAppDeadlines: boolean
   }
-  appearance: { language: string; theme: string }
+  appearance: { language: string; theme: string; showCompletedTasks?: boolean; sidebarStyle?: "dark" | "transparent" | "accent" }
   workspace: { name: string; defaultProjectId: string }
 }
 

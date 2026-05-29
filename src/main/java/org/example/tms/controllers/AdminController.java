@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.example.tms.dto.request.CreateUserRequest;
 import org.example.tms.dto.response.ProjectResponse;
 import org.example.tms.dto.response.UserResponse;
+import org.example.tms.dto.response.TaskResponse;
+import org.example.tms.dto.response.TeamWithMembersResponse;
 import org.example.tms.entity.Role;
 import org.example.tms.service.AdminService;
 import org.springframework.http.HttpStatus;
@@ -59,5 +61,32 @@ public class AdminController {
     public ResponseEntity<Void> deleteProject(@PathVariable Long id) {
         adminService.deleteProject(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // --- TASKS ---
+
+    @GetMapping("/tasks")
+    public ResponseEntity<List<TaskResponse>> getAllTasks() {
+        return ResponseEntity.ok(adminService.getAllTasks());
+    }
+
+    @DeleteMapping("/tasks/{id}")
+    public ResponseEntity<Void> deleteTask(@PathVariable Long id) {
+        adminService.deleteTask(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // --- TEAMS ---
+
+    @GetMapping("/teams")
+    public ResponseEntity<List<TeamWithMembersResponse>> getAllTeams() {
+        return ResponseEntity.ok(adminService.getAllTeamsWithMembers());
+    }
+
+    // --- METRICS ---
+
+    @GetMapping("/system/metrics")
+    public ResponseEntity<org.example.tms.dto.response.SystemMetricsResponse> getSystemMetrics() {
+        return ResponseEntity.ok(adminService.getSystemMetrics());
     }
 }

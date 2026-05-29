@@ -4,9 +4,11 @@ import { Calendar, MessageSquare, Paperclip, Clock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
-import { type Task, priorityLabels } from "@/lib/data"
+import { type Task, priorityLabels, priorityColors, priorityDotColors } from "@/lib/data"
 import { useTaskContext } from "@/lib/task-context"
 import { cn } from "@/lib/utils"
+
+const priorityDots: Record<string, string> = priorityDotColors
 
 interface TaskCardProps {
   task: Task
@@ -27,9 +29,17 @@ export function TaskCard({ task, onClick, variant = "kanban" }: TaskCardProps) {
 
   if (variant === "compact") {
     return (
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
-        className="flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-all hover:border-primary/30 hover:bg-accent/50"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            onClick?.()
+          }
+        }}
+        className="flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3.5 text-left transition-all hover:border-primary/30 hover:bg-accent/50 cursor-pointer select-none"
       >
         <span className={cn("size-2 shrink-0 rounded-full", priorityDots[task.priority])} />
         <div className="flex-1 min-w-0">
@@ -55,14 +65,22 @@ export function TaskCard({ task, onClick, variant = "kanban" }: TaskCardProps) {
             </Avatar>
           )}
         </div>
-      </button>
+      </div>
     )
   }
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="group flex w-full flex-col gap-3 rounded-lg border border-border bg-card p-3.5 text-left transition-all hover:border-primary/30 hover:shadow-md hover:shadow-primary/5"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onClick?.()
+        }
+      }}
+      className="group flex w-full flex-col gap-3 rounded-lg border border-border bg-card p-3.5 text-left transition-all hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 cursor-pointer select-none"
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
@@ -134,7 +152,7 @@ export function TaskCard({ task, onClick, variant = "kanban" }: TaskCardProps) {
           </Avatar>
         )}
       </div>
-    </button>
+    </div>
   )
 }
 

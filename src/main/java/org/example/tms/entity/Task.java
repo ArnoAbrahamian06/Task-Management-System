@@ -52,6 +52,10 @@ public class Task {
     @JoinColumn(name = "assignee_id", nullable = true)
     private TeamMember assignee;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "creator_id")
+    private User creator;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

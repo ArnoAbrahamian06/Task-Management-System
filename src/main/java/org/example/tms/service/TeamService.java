@@ -29,6 +29,7 @@ public class TeamService {
     private final UserRepository userRepository;
     private final TeamMapper teamMapper;
     private final TeamRepository teamRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public void createTeam(CreateTeamRequest request) {
@@ -71,6 +72,31 @@ public class TeamService {
         member.setJoinedAt(LocalDateTime.now());
 
         teamMemberRepository.save(member);
+    }
+
+    @Transactional
+    public void removeUserFromTeam(Long teamId, Long userId) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new EntityNotFoundException("Команда не найдена"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Пользователь не найден"));
+
+        TeamMember member = teamMemberRepository.findByUserAndTeam(user, team)
+                .orElseThrow(() -> new IllegalStateException("Пользователь не состоит в этой команде"));
+
+        // Удаляем пользователя из команды
+        teamMemberRepository.delete(member);
+
+        // Отправляем вежливое уведомление ("письмо")
+        String title = "Уведомление от руководства команды «" + team.getName() + "»";
+        String description = "Уважаемый(ая) " + (user.getName() != null ? user.getName() : user.getEmail()) + "!\n\n" +
+                "С сожалением сообщаем вам, что руководство приняло решение исключить вас из команды «" + team.getName() + "».\n\n" +
+                "Мы искренне благодарим вас за ваш неоценимый вклад в работу команды, уделенное время и проделанный труд. " +
+                "Работа с вами была для нас ценным опытом.\n\n" +
+                "Желаем вам больших успехов в ваших будущих проектах и профессионального роста!";
+
+        notificationService.createNotification(user, "mention", title, description);
     }
 
     public List<TeamMembershipResponse> getMyTeams() {

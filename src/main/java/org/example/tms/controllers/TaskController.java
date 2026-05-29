@@ -82,7 +82,6 @@
 //}
 //
 
-
 package org.example.tms.controllers;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -110,12 +109,18 @@ public class TaskController {
 
     private final TaskService taskService;
 
-    @PreAuthorize("@securityService.isProjectMember(#dto.projectId)")
+    @PreAuthorize("@securityService.canCreateTask(#dto.projectId)")
     @PostMapping
     public ResponseEntity<TaskResponse> create(@RequestBody @Valid CreateTaskRequest dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(taskService.createTask(dto));
     }
 
+    @GetMapping("/my")
+    public ResponseEntity<List<TaskResponse>> getMyTasks(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(taskService.getAllUserTasks(userDetails.getUser().getId()));
+    }
+
+    @PreAuthorize("@securityService.canViewTask(#id)")
     @GetMapping("/{id}")
     public ResponseEntity<TaskResponse> getTaskById(@PathVariable Long id) {
         return ResponseEntity.ok(taskService.getTaskDetails(id));
@@ -135,35 +140,34 @@ public class TaskController {
         return ResponseEntity.ok(taskService.updateTask(id, dto));
     }
 
-    // ИСПРАВЛЕНО: Передаем ID пользователя напрямую в сервис
     @GetMapping("/my/in-progress/count")
     public ResponseEntity<Long> getInProgressCount(@AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(taskService.getMyInProgressTasksCount(userDetails.getUser().getId()));
     }
 
-    // ИСПРАВЛЕНО: Передаем ID пользователя напрямую в сервис
     @GetMapping("/my/completed/count")
     public ResponseEntity<Long> getCompletedCount(@AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(taskService.getMyCompletedTasksCount(userDetails.getUser().getId()));
     }
 
-    // ИСПРАВЛЕНО: Передаем ID пользователя напрямую в сервис
     @GetMapping("/my/overdue/count")
     public ResponseEntity<Long> getOverdueCount(@AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(taskService.getOverdueTasksCount(userDetails.getUser().getId()));
     }
 
     @GetMapping("/my/high-priority")
-    public ResponseEntity<List<TaskResponse>> getHighPriorityTasks(@AuthenticationPrincipal CustomUserDetails userDetails) {
+    public ResponseEntity<List<TaskResponse>> getHighPriorityTasks(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(taskService.getHighPriorityTasks(userDetails.getUser().getId()));
     }
 
     @GetMapping("/my/top-priority")
-    public ResponseEntity<List<TaskResponse>> getTopPriorityTasks(@AuthenticationPrincipal CustomUserDetails userDetails) {
+    public ResponseEntity<List<TaskResponse>> getTopPriorityTasks(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(taskService.getTop5PriorityTasks(userDetails.getUser().getId()));
     }
 
-    @PreAuthorize("@securityService.isTeamLead()")
+    @PreAuthorize("@securityService.canDeleteTask(#id)")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         taskService.deleteTask(id);
