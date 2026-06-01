@@ -26,7 +26,7 @@ public class SystemAuditLog {
     private String severity; // INFO, SUCCESS, WARNING, ERROR
 
     @Column(nullable = false)
-    private String component; // e.g. AuthService, ProjectService, etc.
+    private String component;
 
     @Column(nullable = false)
     private String message;

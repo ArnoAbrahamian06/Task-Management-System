@@ -142,11 +142,7 @@ public class TaskService {
                 });
     }
 
-    /**
-     * Оставляем этот метод только для операций, где нужна полная сущность User
-     * (например, создание/редактирование).
-     * Для простых фильтров и счетчиков лучше использовать userId из контроллера.
-     */
+
     private User getCurrentUser() {
         return userRepository.findByEmail(
                 SecurityContextHolder.getContext().getAuthentication().getName())
